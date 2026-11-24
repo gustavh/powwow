@@ -1687,10 +1687,12 @@ Powwow can have several connections open at once, each with a name:
 goes to the default connection, at first `main`; `##<id>` makes `<id>`
 the default, and `##<id> <command>` sends one command to it instead.
 The text from every active connection is shown, and actions and the like
-apply to it; `#snoop <id>` makes a connection inactive, so that its text
-is dropped, or active again. `#zap <id>` closes it. Many MUDs do not
-allow playing several characters at once, but you can also connect to
-several MUDs.
+apply to it; each line from a connection other than the default one
+starts with a label of its name, such as `##chat>`, so that you can tell
+where it came from. `#snoop <id>` makes a connection inactive, so that
+its text is dropped, or active again. `#zap <id>` closes it. Many MUDs
+do not allow playing several characters at once, but you can also
+connect to several MUDs.
 
 ### Spawn an external program
 

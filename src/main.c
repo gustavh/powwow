@@ -999,11 +999,10 @@ void printver(int level)
     /* the authors are in README; a copyright sign and an en dash if the
      * terminal can show them */
     bool utf8 = tty_locale_utf8();
-    message_wrap(VER_CONT, "Powwow version %s%s%s%s, %s 1998%s2026 by the "
+    message_wrap(VER_CONT, "Powwow version %s%s%s%s %s 1998%s2026 by the "
                  "powwow authors", VERSION, commit ? " (" : "",
                  commit ? GIT_COMMIT : "", commit ? ")" : "",
-                 utf8 ? u8"©" : u8"Copyright",
-                 utf8 ? u8"–" : u8"-");
+                 utf8 ? u8"©" : u8"(c)", utf8 ? u8"–" : u8"-");
     if (level < 1)
         return;
     message_wrap(VER_CONT, "https://github.com/MUME/powwow");

@@ -1266,7 +1266,7 @@ run 'C-u kills to the start of the line' '' \
 "
 has 'z #print abc'
 
-cr=$(printf '\022')
+ctrl_r=$(printf '\022')
 cs=$(printf '\023')
 ce=$(printf '\005')
 history='#print apple one
@@ -1274,20 +1274,20 @@ history='#print apple one
 #print apple two'
 
 run 'C-r finds the last line with the text' "$history" \
-    "${cr}ban${ce}s
+    "${ctrl_r}ban${ce}s
 "
 has 'bananas'
 
 run 'C-r again finds an older line, and C-s a newer one' "$history" \
-    "${cr}apple${cr}${ce}!
-" "${cr}apple${cr}${cr}${cs}${ce}?
+    "${ctrl_r}apple${ctrl_r}${ce}!
+" "${ctrl_r}apple${ctrl_r}${ctrl_r}${cs}${ce}?
 "
 has 'apple one!'
 has 'apple two?'
 
 run 'C-g restores the line, and C-r C-r repeats the last search' \
-    "$history" "#print typed${cr}ban$(printf '\007')
-" "${cr}${cr}${ce}!
+    "$history" "#print typed${ctrl_r}ban$(printf '\007')
+" "${ctrl_r}${ctrl_r}${ce}!
 "
 has 'typed'
 has 'banana!'
@@ -1315,18 +1315,18 @@ has 'apple one!'
 
 run 'C-_ undoes moving in the history and searching' "$history" \
     "#print typed$(printf '\020')${cu}!
-" "#print typed${cr}ban${ce}${cu}?
+" "#print typed${ctrl_r}ban${ce}${cu}?
 "
 has 'typed!'
 has 'typed?'
 
 run 'C-n after a search goes on to the next line' "$history" \
-    "#print typed${cr}ban${ce}$(printf '\016')!
+    "#print typed${ctrl_r}ban${ce}$(printf '\016')!
 "
 has 'apple two!'
 
 run 'BS deletes from the search text' "$history" \
-    "${cr}appz$(printf '\b')le${cr}${ce}!
+    "${ctrl_r}appz$(printf '\b')le${ctrl_r}${ce}!
 "
 has 'apple one!'
 

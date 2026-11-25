@@ -55,20 +55,20 @@ COMPILING
 	setup-x86_64.exe -q -P libgnutls-devel,libncurses-devel
 	setup-x86_64.exe -q -P libpcre2-devel,zlib-devel
 
-	Powwow is built using GNU autoconf scripts, it should detect any
-	system dependencies it needs and set the appropriate flags.  Just
-	run:
-
-	./configure
-	make
-
-	If you do not have a ‘configure’ script, first run:
+	Powwow is built using GNU autoconf scripts, which detect the system
+	dependencies it needs and set the appropriate flags.  Run:
 
 	./autogen.sh
+	make
 
-	which also uses ‘pkg-config’, if installed, to find the libraries
-	outside the default paths, such as in ‘/usr/local’ on FreeBSD or in
+	‘autogen.sh’ creates the ‘configure’ script and runs it, with the
+	arguments given to it, such as ‘--disable-tls’.  It also uses
+	‘pkg-config’, if installed, to find the libraries outside the
+	default paths, such as in ‘/usr/local’ on FreeBSD or in
 	‘/opt/homebrew’ on macOS.
+
+	A release tarball has the ‘configure’ script already: in it, run
+	‘./configure’ and ‘make’.
 
 	The powwow binary will run from any location, but there are some
 	settings set at compile time that will make more sense if you use

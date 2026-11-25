@@ -7,7 +7,8 @@ It implements (a subset of) the telnet protocol.
 Files you should have received:
 
 	README              This text.
-	ChangeLog           User-visible changes in each release.
+	ChangeLog.md        User-visible changes in each release.
+	ChangeLog.old       Those up to 1.3.2.
 	doc/powwow.md.in    The manual, which the build makes into
 	                    doc/powwow.md.  Read this.
 	doc/powwow.help     The help of ‘#help’, as plain text.

@@ -53,20 +53,23 @@ committed, understand it, and take responsibility for it as its author.
   `test_commands.sh` checks that every command is described in
   `doc/powwow.md.in`.
 
-## Commits and the ChangeLog
+## Commits and ChangeLog.md
 
 - **One change per commit:** keep each commit to one logical change, and
   keep bug fixes and changes of behavior apart from restyling.
 - **Commit messages:** the first line is a short, self-contained description of
   the change. The body gives the important facts about the commit that cannot
   be inferred from the first line. No line is wider than 75 columns.
-- **ChangeLog:** start each entry with a word that deserves to be highlighted,
-  never with "A", "The" or similar.
+- **ChangeLog.md:** start each entry with a word that deserves to be
+  highlighted, never with "A", "The" or similar. Put commands, options, file
+  names and text that powwow prints in code, as in
+  ``* `#option save`, on by default, saves the definition file on exit.``
+  Lines are at most 72 columns wide.
 - **Release tags:** annotated, named `vX.Y.Z`, on the commit that bumps the
-  version. The message is plain text: `powwow X.Y.Z`, a blank line, and the
-  release's ChangeLog section without its indentation, in lines of at most
-  72 columns. Create them with `--cleanup=whitespace`, as the default
-  cleanup drops lines that start with `#`.
+  version. The message is `powwow X.Y.Z`, a blank line, and the release's
+  section of `ChangeLog.md`, with its headings one level up. Create them with
+  `--cleanup=whitespace`, as the default cleanup drops lines that start with
+  `#`.
 
 ## User interface and documentation
 

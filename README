@@ -62,7 +62,7 @@ COMPILING
 	make
 
 	‘autogen.sh’ creates the ‘configure’ script and runs it, with the
-	arguments given to it, such as ‘--disable-tls’.  It also uses
+	arguments given to it, such as ‘--disable-tls’.  ‘configure’ uses
 	‘pkg-config’, if installed, to find the libraries outside the
 	default paths, such as in ‘/usr/local’ on FreeBSD or in
 	‘/opt/homebrew’ on macOS.

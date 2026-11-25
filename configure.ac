@@ -144,6 +144,27 @@ AC_PATH_PROGS([MARKDOWNLINT], [markdownlint-cli2])
 
 # Checks for libraries.
 
+# the headers and libraries of these packages where pkg-config says they
+# are, such as in /usr/local on FreeBSD or in /opt/homebrew on macOS,
+# unless the flags have them already
+AC_PATH_PROGS([PKG_CONFIG], [pkg-config pkgconf])
+AS_IF([test -n "${PKG_CONFIG}"], [
+    for p in gnutls libpcre2-posix libgrapheme; do
+        "${PKG_CONFIG}" --exists "$p" || continue
+        for f in `"${PKG_CONFIG}" --cflags-only-I "$p"`; do
+            case " ${CPPFLAGS} " in
+                *" $f "*) ;;
+                *) CPPFLAGS="${CPPFLAGS:+${CPPFLAGS} }$f" ;;
+            esac
+        done
+        for f in `"${PKG_CONFIG}" --libs-only-L "$p"`; do
+            case " ${LDFLAGS} " in
+                *" $f "*) ;;
+                *) LDFLAGS="${LDFLAGS:+${LDFLAGS} }$f" ;;
+            esac
+        done
+    done ])
+
 # powwow uses curses for termcap, unless --enable-vt100; powwow-muc always
 # uses curses, and is not built without it
 save_LIBS=$LIBS

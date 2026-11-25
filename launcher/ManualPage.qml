@@ -22,6 +22,11 @@ Page {
                                   === Qt.ColorScheme.Dark)
     // the place of the text found last, in its block, selected
     property var found: ({ block: 0, start: 0, end: 0 })
+    // the size of the text of the sections, a point smaller than that of
+    // the manual
+    readonly property real sectionPointSize: (
+        Qt.application.font.pointSize > 0
+        ? Qt.application.font.pointSize - 1 : 11)
 
     // the title of a heading as the text shows it, without its markup
     function plain(title) {
@@ -143,42 +148,99 @@ Page {
         anchors.margins: 24
         spacing: 16
 
-        // the sections
-        ListView {
-            id: contents
+        // the sections, in smaller text on a shade of their own, as the
+        // sidebars of macOS, apart from the text of the manual
+        Rectangle {
+            id: panel
 
-            Layout.preferredWidth: 220
+            Layout.preferredWidth: 200
             Layout.fillHeight: true
-            clip: true
-            activeFocusOnTab: true
-            model: page.sections
-            delegate: ListRow {
-                id: section
+            radius: 8
+            // opaque, as the fades at the ends of the list are of it
+            color: Qt.tint(page.palette.window,
+                           page.dark ? Qt.rgba(1, 1, 1, 0.05)
+                                     : Qt.rgba(0, 0, 0, 0.04))
 
-                required property var modelData
-                required property int index
+            ListView {
+                id: contents
 
-                width: ListView.view.width
-                text: modelData.title
-                highlighted: ListView.isCurrentItem
-                listFocused: contents.activeFocus
-                indent: (modelData.level - 1) * 16
-                onClicked: {
-                    contents.currentIndex = index
-                    page.showAt(modelData.block, modelData.at)
+                anchors.fill: parent
+                anchors.topMargin: 6
+                anchors.bottomMargin: 6
+                clip: true
+                activeFocusOnTab: true
+                model: page.sections
+                delegate: ListRow {
+                    id: section
+
+                    required property var modelData
+                    required property int index
+
+                    width: ListView.view.width
+                    text: modelData.title
+                    highlighted: ListView.isCurrentItem
+                    listFocused: contents.activeFocus
+                    compact: true
+                    indent: (modelData.level - 1) * 12
+                    onClicked: {
+                        contents.currentIndex = index
+                        page.showAt(modelData.block, modelData.at)
+                    }
+
+                    contentItem: Label {
+                        text: section.text
+                        color: section.textColor
+                        font.bold: section.modelData.level === 1
+                        font.pointSize: page.sectionPointSize
+                        elide: Text.ElideRight
+                    }
                 }
+                Keys.onReturnPressed: {
+                    const s = page.sections[currentIndex]
+                    if (s !== undefined)
+                        page.showAt(s.block, s.at)
+                }
+                // shown while the list is longer than its room, also on
+                // macOS, which otherwise shows it only while scrolling
+                ScrollBar.vertical: ScrollBar {
+                    id: bar
 
-                contentItem: Label {
-                    text: section.text
-                    color: section.textColor
-                    font.bold: section.modelData.level === 1
-                    elide: Text.ElideRight
+                    policy: (contents.contentHeight > contents.height
+                             ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded)
                 }
             }
-            Keys.onReturnPressed: {
-                const s = page.sections[currentIndex]
-                if (s !== undefined)
-                    page.showAt(s.block, s.at)
+
+            // the list fading out at an end that has more beyond it, a
+            // sign that it scrolls
+            Rectangle {
+                anchors.top: contents.top
+                // not over the scroll bar
+                width: contents.width - (bar.visible ? bar.width : 0)
+                height: 24
+                visible: !contents.atYBeginning
+                gradient: Gradient {
+                    GradientStop { position: 0; color: panel.color }
+                    GradientStop {
+                        position: 1
+                        color: Qt.rgba(panel.color.r, panel.color.g,
+                                       panel.color.b, 0)
+                    }
+                }
+            }
+            Rectangle {
+                anchors.bottom: contents.bottom
+                // not over the scroll bar
+                width: contents.width - (bar.visible ? bar.width : 0)
+                height: 24
+                visible: !contents.atYEnd
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0
+                        color: Qt.rgba(panel.color.r, panel.color.g,
+                                       panel.color.b, 0)
+                    }
+                    GradientStop { position: 1; color: panel.color }
+                }
             }
         }
 

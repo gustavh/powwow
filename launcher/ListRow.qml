@@ -17,7 +17,10 @@ ItemDelegate {
     // the keyboard, such as by Tab
     property bool listFocused
     property bool byKeys
-    // how far in the text of this row starts beyond that of the others
+    // rows of a smaller height, for a long list such as the sections of
+    // the manual, and how far in the text of this one starts beyond that
+    // of the others
+    property bool compact
     property real indent
 
     readonly property bool fluent: Launcher.style === "FluentWinUI3"
@@ -56,13 +59,17 @@ ItemDelegate {
     Component.onCompleted: {
         if (fluent) {
             leftPadding += indent
+            if (compact) {
+                topPadding = 3
+                bottomPadding = 3
+            }
             return
         }
         background = inset.createObject(row)
         leftPadding = 16 + indent
         rightPadding = 16
-        topPadding = 8
-        bottomPadding = 8
+        topPadding = compact ? 3 : 8
+        bottomPadding = compact ? 3 : 8
     }
 
     // the focus outline of Fluent: two pixels in the colour of the text,

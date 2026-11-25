@@ -802,18 +802,6 @@ int main(int argc, char **argv)
     if (!batch)
         printver(1);
 
-    if (nargs == 0 && !batch) {
-        /* the commands quoted as in the help, which the terminal shows as
-         * ' where it cannot show the typographic quotes */
-        message_wrap(VER_CONT, "\n"
-                     "Powwow comes with ABSOLUTELY NO WARRANTY; for details"
-                     " type %s.\n"
-                     "This is free software, and you are welcome to"
-                     " redistribute it under certain conditions; type"
-                     " %s for details.",
-                     u8"‘#help warranty’", u8"‘#help copyright’");
-    }
-
     /* --set saves as the launcher does, with --config */
     if (set_spec != NULL)
         config_global = true;

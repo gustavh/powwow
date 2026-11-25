@@ -58,6 +58,8 @@ The user-visible changes in each release; those up to 1.3.2 are in
   for both.
 * By default, typed text is `bold` and the messages of powwow are
   `italic Blue`.
+* powwow starts without the notice of the warranty and the license,
+  which `#help warranty` and `#help copyright` show.
 * `#setvar <name>=default` sets `buffer`, `editmem`, `lines` and `mem`
   to their defaults, and `lines` to the height of the terminal;
   `#setvar` marks those that have them with `(default)`.

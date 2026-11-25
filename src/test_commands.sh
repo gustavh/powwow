@@ -272,11 +272,8 @@ has '#no connection named "nosuch"'
 has '#error: missing right parenthesis.'
 has 'alive'
 
-run 'without UTF-8, the greeting and the help quote commands with '"'" \
-    '#help history
+run 'without UTF-8, the help quotes commands with '"'" '#help history
 #help -P history'
-grep -Fq "for details type '#help warranty'." "$tmp/out" \
-    || fail "expected '#help warranty' quoted"
 [ "$(grep -c "^'#history' alone shows" "$tmp/out")" -eq 2 ] \
     || fail "expected '#history' quoted, with and without the pager"
 

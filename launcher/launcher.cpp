@@ -671,15 +671,27 @@ QString Launcher::configFile()
     return shown_path(expand_path(path));
 }
 
-QString Launcher::manualText()
+// the text of the file whose path powwow --get prints for 'setting',
+// empty if it cannot be read
+QString Launcher::fileText(const QString &setting)
 {
     QString path, error;
-    if (!m_usable || !run({ "--get", "manual" }, &path, &error))
+    if (!m_usable || !run({ "--get", setting }, &path, &error))
         return QString();
     QFile f(expand_path(path));
     if (!f.open(QIODevice::ReadOnly))
         return QString();
     return QString::fromUtf8(f.readAll());
+}
+
+QString Launcher::manualText()
+{
+    return fileText("manual");
+}
+
+QString Launcher::releaseNotesText()
+{
+    return fileText("release-notes");
 }
 
 QString Launcher::style() const

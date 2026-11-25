@@ -1,2 +1,6 @@
 /powwow.md
 /*.txt.gz
+/release-notes.md
+# what make check writes of its test of the release notes
+/*.log
+/*.trs

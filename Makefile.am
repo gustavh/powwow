@@ -17,6 +17,7 @@ EXTRA_DIST = .clang-tidy AGENTS.md ChangeLog.md ChangeLog.old \
              launcher/PowwowDialog.qml launcher/InfoDialog.qml \
              launcher/DuplicateDialog.qml launcher/ListRow.qml \
              launcher/PowwowToolTip.qml launcher/ShortcutMenuItem.qml \
+             launcher/ReleaseNotesDialog.qml \
              launcher/HiliteEditor.qml launcher/ColorButton.qml \
              launcher/macos.h launcher/macos.mm \
              launcher/powwow-launcher.rc launcher/make-icns.sh \
@@ -47,8 +48,10 @@ lint:
 tidy:
 	cd src && $(MAKE) $(AM_MAKEFLAGS) tidy
 
-# the launcher, built with CMake in launcher/build; CMAKE_FLAGS go to
-# CMake, such as -DCMAKE_PREFIX_PATH=DIR if it does not find Qt in DIR.
+# the launcher, built with CMake in launcher/build, after powwow and its
+# files, such as the release notes, which the launcher run from its build
+# directory shows; CMAKE_FLAGS go to CMake, such as
+# -DCMAKE_PREFIX_PATH=DIR if it does not find Qt in DIR.
 # On Cygwin, it is built with the MinGW build of Qt for Windows, in
 # launcher-win: QT is the folder of that Qt, by default the newest in
 # C:\Qt
@@ -56,10 +59,10 @@ CMAKE = cmake
 CMAKE_FLAGS =
 QT =
 if CYGWIN
-launcher:
+launcher: all
 	$(srcdir)/cygwin/launcher.sh build '$(QT)'
 else
-launcher:
+launcher: all
 	$(CMAKE) -S $(srcdir)/launcher -B launcher/build \
 	    -DPOWWOW_BUILD_PROGRAM='$(abs_builddir)/src/powwow' $(CMAKE_FLAGS)
 	$(CMAKE) --build launcher/build --parallel

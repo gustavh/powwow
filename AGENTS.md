@@ -64,10 +64,10 @@ committed, understand it, and take responsibility for it as its author.
   highlighted, never with "A", "The" or similar. Put commands, options, file
   names and text that powwow prints in code, as in
   ``* `#option save`, on by default, saves the definition file on exit.``
-  Lines are at most 72 columns wide.
+  Lines are at most 72 columns wide, as `make check` checks.
 - **Release tags:** annotated, named `vX.Y.Z`, on the commit that bumps the
-  version. The message is `powwow X.Y.Z`, a blank line, and the release's
-  section of `ChangeLog.md`, with its headings one level up. Create them with
+  version. The message is `powwow X.Y.Z`, a blank line, and what
+  `doc/release-notes.sh X.Y.Z` prints. Create them with
   `--cleanup=whitespace`, as the default cleanup drops lines that start with
   `#`.
 

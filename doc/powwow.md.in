@@ -116,10 +116,10 @@ or `off`, `host`, as `#host` takes it, or the user-wide attributes of
 none, and the seconds of `#setvar keepalive`, the user-wide one,
 `keepalive`, 0 for off, and the MUD's own, `mud-keepalive`, or `default`
 when it has none; `--get` also prints the paths of the user-wide
-settings file, `config-file`, and
-of this manual, `manual`, and `in-use`, the process ID of a powwow that
-has the definition file open, or nothing; `--set` then fails, as that
-powwow would write over it.
+settings file, `config-file`, of this manual, `manual`, and of the notes
+of this release, from `ChangeLog.md`, `release-notes`, and `in-use`, the
+process ID of a powwow that has the definition file open, or nothing;
+`--set` then fails, as that powwow would write over it.
 `--list-settings` prints all of them, as `NAME=VALUE`. `--set` saves as
 with `--config`: the settings of the user-wide settings file go there,
 unless `--no-config` is given, and the others need a definition file. A
@@ -158,7 +158,9 @@ type commands to begin. The Windows installer and the disk image for
 macOS include it, and their shortcuts and `.powwow` files open it; README
 tells how to build it elsewhere.
 
-It has four pages: MUDs, Settings, the manual and About.
+It has four pages: MUDs, Settings, the manual and About, which shows the
+versions of the launcher and of powwow, and, with **What's new**, the
+notes of this release of powwow.
 
 ### MUDs
 

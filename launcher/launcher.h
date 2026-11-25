@@ -136,6 +136,9 @@ public:
     Q_INVOKABLE QString configFile();
     // the text of the manual, in Markdown, empty if it cannot be read
     Q_INVOKABLE QString manualText();
+    // the notes of this release of powwow, in Markdown, from its section
+    // of ChangeLog.md, empty if they cannot be read
+    Q_INVOKABLE QString releaseNotesText();
     // 'markdown' as HTML, with code in the fixed-width font on a shade of
     // its own, darker or lighter for 'dark' mode
     Q_INVOKABLE QString markdownHtml(const QString &markdown,
@@ -168,6 +171,7 @@ private:
     void placeAfter(const QString &mud, const QString &after);
     bool run(const QStringList &args, QString *out, QString *error);
     bool run(const QStringList &args, QString *out);
+    QString fileText(const QString &setting);
     void check();
     bool fail(const QString &message);
 

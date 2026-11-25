@@ -769,7 +769,7 @@ grep -Fxq '#host mud.example 4000 --no-tls --utf8' "$tmp/new.pw" \
 [ "$("$POWWOW" --no-config --get host "$tmp/new.pw" 2> /dev/null)" \
   = 'mud.example 4000 --no-tls --utf8' ] \
     || fail 'expected --get host to print the host'
-name='--get prints the paths of the user-wide settings file and the manual'
+name='--get prints the paths of the settings file, manual and release notes'
 [ "$("$POWWOW" "--config=$conf" --get config-file 2> /dev/null)" \
   = "$conf_shown" ] \
     || fail 'expected --get config-file to print the user-wide settings file'
@@ -779,6 +779,13 @@ manual=$("$POWWOW" --no-config --get manual 2> /dev/null)
 case $manual in
     */powwow.md) [ -f "$manual" ] || fail "expected the manual at $manual" ;;
     *) fail "expected --get manual to print the path of powwow.md: $manual" ;;
+esac
+notes=$("$POWWOW" --no-config --get release-notes 2> /dev/null)
+case $notes in
+    */release-notes.md)
+        [ -f "$notes" ] || fail "expected the release notes at $notes" ;;
+    *) fail "expected --get release-notes to print the path of" \
+            "release-notes.md: $notes" ;;
 esac
 "$POWWOW" --no-config --set manual=x > /dev/null 2>&1 \
     && fail 'expected --set manual to fail'

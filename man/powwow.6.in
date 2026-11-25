@@ -261,8 +261,10 @@ or
 when it has none, or the path of the user-wide settings
 file,
 .BR config\-file ,
-or of the manual,
+of the manual,
 .BR manual ,
+or of the notes of this release,
+.BR release\-notes ,
 or
 .BR in\-use ,
 the process ID of a

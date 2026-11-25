@@ -1,0 +1,16 @@
+# the rules of markdownlint-cli2 for the notes of a release, which
+# release-notes.sh takes from ChangeLog.md: those of
+# ../.markdownlint-cli2.yaml, but lines of at most 72 columns, as the
+# message of the tag of the release has, no top-level heading, as the
+# title of the GitHub release, or of the dialog of the launcher, is, and
+# code that starts or ends with spaces, such as `#    `, a message that
+# starts with them
+config:
+  MD010:
+    code_blocks: false
+  MD013:
+    line_length: 72
+  MD014: false
+  MD038: false
+  MD040: false
+  MD041: false

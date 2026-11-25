@@ -3481,9 +3481,11 @@ static struct hilite *hilite_setting(const char *name, size_t len, bool *own)
  * the settings of --get and --set: the command options, such as editor,
  * the on/off options, as on or off, host, as #host takes it, the
  * user-wide attributes of #hilite input and messages, as #hilite takes
- * them, or nothing for none, and the MUD's own, or default if it has none, the paths of the user-wide settings file,
- * config-file, and of the manual, manual, and the pid of a powwow that has
- * the definition file open, in-use, which --set cannot set
+ * them, or nothing for none, and the MUD's own, or default if it has
+ * none, the paths of the user-wide settings file, config-file, of the
+ * manual, manual, and of the notes of this release, release-notes, and
+ * the pid of a powwow that has the definition file open, in-use, which
+ * --set cannot set
  */
 bool print_setting(const char *name)
 {
@@ -3537,13 +3539,17 @@ bool print_setting(const char *name)
                         ? windows_path(config_file, buf, sizeof buf) : ""));
         return true;
     }
-    if (strcmp(name, "manual") == 0) {
-        /* next to the help file */
+    /* next to the help file */
+    const char *doc = (strcmp(name, "manual") == 0 ? "powwow.md"
+                       : strcmp(name, "release-notes") == 0
+                       ? "release-notes.md"
+                       : NULL);
+    if (doc != NULL) {
         char path[BUFSIZE];
         snprintf(path, sizeof path, "%s", helpfile);
         char *slash = strrchr(path, '/');
         char *base = slash != NULL ? slash + 1 : path;
-        snprintf(base, sizeof path - (size_t)(base - path), "powwow.md");
+        snprintf(base, sizeof path - (size_t)(base - path), "%s", doc);
         printf("%s\n", windows_path(path, buf, sizeof buf));
         return true;
     }
@@ -3583,7 +3589,7 @@ static const char *const hilite_settings[] = {
     "mud-hilite-messages"
 };
 static const char *const file_settings[] = {
-    "config-file", "in-use", "manual"
+    "config-file", "in-use", "manual", "release-notes"
 };
 
 size_t setting_names(const char **names, size_t size)

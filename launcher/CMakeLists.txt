@@ -41,6 +41,7 @@ qt_add_qml_module(powwow-launcher
         MudDialog.qml
         AboutPage.qml
         ManualPage.qml
+        ReleaseNotesDialog.qml
         SelectableText.qml
         EntryField.qml
         PowwowDialog.qml

@@ -48,6 +48,9 @@ Page {
                             : qsTr("powwow was not found, or did not run."))
                 + "<br><small>" + page.html(Launcher.powwow)
                 + "</small></p>",
+                // the notes of this release, in a dialog
+                "<p><a href=\"release-notes\">"
+                + page.html(qsTr("What’s new")) + "</a></p>",
                 "<p>" + page.html(qsTr("powwow is free software, under the"
                                        + " terms of the GNU General Public"
                                        + " License, version 2 or later; Qt"
@@ -59,7 +62,10 @@ Page {
                 + "github.com/MUME/powwow</a></p>",
             ].join("")
             onLinkActivated: function(link) {
-                Qt.openUrlExternally(link)
+                if (link === "release-notes")
+                    notes.open()
+                else
+                    Qt.openUrlExternally(link)
             }
 
             HoverHandler {
@@ -71,5 +77,12 @@ Page {
         Item {
             Layout.fillHeight: true
         }
+    }
+
+    ReleaseNotesDialog {
+        id: notes
+
+        // from the line of powwow --version
+        version: (/ version (\S+)/.exec(page.powwowVersion) ?? [])[1] ?? ""
     }
 }

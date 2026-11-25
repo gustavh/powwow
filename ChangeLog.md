@@ -18,6 +18,9 @@ The user-visible changes in each release; those up to 1.3.2 are in
   the `.powwow` files open instead of powwow.
 * On macOS, `make macos-dmg` makes a disk image with `powwow.app`: the
   launcher, with powwow, its help and its manual.
+* **What's new**, on the **About** page of the launcher, shows the notes
+  of this release, its section of this file, which powwow installs as
+  `release-notes.md` and `powwow --get release-notes` finds.
 
 ### User-wide settings
 

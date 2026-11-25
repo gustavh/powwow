@@ -30,6 +30,10 @@ MAINTAINERCLEANFILES = Makefile.in aclocal.m4 compile config.guess \
                        config.h.in config.h.in~ config.sub configure \
                        configure~ depcomp install-sh missing test-driver
 
+# make distcheck configures with the flags that autogen.sh found with
+# pkg-config, such as where Homebrew has the libraries
+AM_DISTCHECK_CONFIGURE_FLAGS = CPPFLAGS='$(CPPFLAGS)' LDFLAGS='$(LDFLAGS)'
+
 # check the markup of the man page (needs mandoc), and of the Markdown
 # with markdownlint-cli2 if configure found it, with its rules in
 # .markdownlint-cli2.yaml

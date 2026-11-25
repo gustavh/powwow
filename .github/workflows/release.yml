@@ -1,0 +1,173 @@
+# build the source tarball, the disk image for macOS and the installer
+# for Windows, as make distcheck, make macos-dmg and make
+# windows-installer do (see README), and on a tag v<version> put them in
+# a draft release of it, with the version's section of ChangeLog.md as
+# its notes, to publish by hand; run by hand, from Actions, it builds
+# them only, to download from the run
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  # the Qt for MinGW of the launcher on Windows, as README installs it
+  QT_VERSION: 6.10.3
+  MINGW_TOOL: tools_mingw1310
+  MINGW_PACKAGE: qt.tools.win64_mingw1310
+
+jobs:
+  # on a tag, that configure.ac has its version and ChangeLog.md its
+  # section, the notes of the release, before the builds spend their time
+  # on it; the job runs, with nothing to do, by hand too, as the builds
+  # would be skipped after a skipped job
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Check the version of the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's/^AC_INIT(\[powwow\],\[\(.*\)\])$/\1/p' \
+                        configure.ac)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+              echo "::error::tag $GITHUB_REF_NAME, but configure.ac has" \
+                   "version $version"
+              exit 1
+          fi
+      - name: Make the notes of the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: doc/release-notes.sh "${GITHUB_REF_NAME#v}" > notes.md
+      - uses: actions/upload-artifact@v7
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          archive: false
+          path: notes.md
+          if-no-files-found: error
+
+  # the source tarball, which make distcheck checks: that it builds out
+  # of its tree, passes make check, and installs and uninstalls
+  source:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake pkg-config \
+              libgnutls28-dev libpcre2-dev libncurses-dev zlib1g-dev
+      - name: Configure
+        run: ./autogen.sh
+      - name: Make the source tarball
+        run: make -j"$(nproc)" distcheck
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: powwow-*.tar.gz
+          if-no-files-found: error
+
+  # arm64 only; on the oldest macOS to run on, as the disk image has the
+  # libraries of Homebrew, built for the macOS they are installed on
+  macos:
+    needs: version
+    runs-on: macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the packages
+        run: |
+          brew install autoconf automake pkgconf gnutls pcre2 libgrapheme \
+              cmake qtdeclarative
+      - name: Build
+        run: |
+          ./autogen.sh
+          make -j"$(sysctl -n hw.ncpu)"
+      - name: Make the disk image
+        run: |
+          make macos-dmg CMAKE_FLAGS=-DCMAKE_PREFIX_PATH="$(brew --prefix)"
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: powwow-*.dmg
+          if-no-files-found: error
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: >-
+          C:\cygwin\bin\bash.exe --noprofile --norc -eo pipefail -o igncr
+          '{0}'
+    steps:
+      # the scripts with LF, as Cygwin runs them
+      - name: Check out without CRLF
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - uses: cygwin/cygwin-install-action@v4
+        with:
+          packages: >-
+            gcc-core make autoconf automake pkg-config
+            libgnutls-devel libpcre2-devel libncurses-devel zlib-devel
+            nano ca-certificates xz zstd bzip2 lzip git
+      - name: Install Qt and Inno Setup
+        shell: pwsh
+        run: |
+          pip install aqtinstall
+          aqt install-qt windows desktop $env:QT_VERSION win64_mingw -O C:\Qt
+          aqt install-tool windows desktop $env:MINGW_TOOL `
+              $env:MINGW_PACKAGE -O C:\Qt
+          aqt install-tool windows desktop tools_cmake -O C:\Qt
+          aqt install-tool windows desktop tools_ninja -O C:\Qt
+          choco install innosetup --no-progress -y
+      # the licenses of the Cygwin packages, from their source packages,
+      # downloaded only for the packages that the cache lacks: a new
+      # version of a package keeps those of the version cached
+      - uses: actions/cache@v6
+        with:
+          path: cygwin-licenses
+          key: cygwin-licenses-${{ github.run_id }}
+          restore-keys: cygwin-licenses-
+      - name: Build
+        run: |
+          export PATH=/usr/local/bin:/usr/bin:$PATH
+          # the checkout, by the user of Windows, for the git of Cygwin
+          git config --system --add safe.directory '*'
+          ./autogen.sh
+          make -j"$(nproc)"
+      - name: Make the installer
+        run: |
+          export PATH=/usr/local/bin:/usr/bin:$PATH
+          make windows-installer
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: powwow-*-setup.exe
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [source, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+      # fails if the tag has a release already: to run it again, delete
+      # the draft first
+      - name: Make a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+              --draft --title "powwow ${GITHUB_REF_NAME#v}" \
+              --notes-file notes.md powwow-*.tar.gz powwow-*.dmg \
+              powwow-*-setup.exe

@@ -6,7 +6,7 @@
 # the section's own; they are the notes of its GitHub release,
 # release-notes.md, which the launcher shows, and, after a line
 # "powwow VERSION", the message of its tag; run in the source directory,
-# as doc/Makefile does:
+# as the release workflow and doc/Makefile do:
 #
 #     doc/release-notes.sh VERSION
 #

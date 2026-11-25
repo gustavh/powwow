@@ -83,6 +83,7 @@ Page {
         id: notes
 
         // from the line of powwow --version
-        version: (/ version (\S+)/.exec(page.powwowVersion) ?? [])[1] ?? ""
+        version: (/ version ([^\s,]+)/.exec(page.powwowVersion)
+                  ?? [])[1] ?? ""
     }
 }

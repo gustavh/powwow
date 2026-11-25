@@ -162,7 +162,7 @@ Page {
                 text: modelData.title
                 highlighted: ListView.isCurrentItem
                 listFocused: contents.activeFocus
-                leftPadding: (modelData.level - 1) * 16 + 16
+                indent: (modelData.level - 1) * 16
                 onClicked: {
                     contents.currentIndex = index
                     page.showAt(modelData.block, modelData.at)

@@ -17,6 +17,8 @@ ItemDelegate {
     // the keyboard, such as by Tab
     property bool listFocused
     property bool byKeys
+    // how far in the text of this row starts beyond that of the others
+    property real indent
 
     readonly property bool fluent: Launcher.style === "FluentWinUI3"
     readonly property bool dark: (Application.styleHints.colorScheme
@@ -52,10 +54,12 @@ ItemDelegate {
 
     // and room around the text in it, which starts 6 pixels in
     Component.onCompleted: {
-        if (fluent)
+        if (fluent) {
+            leftPadding += indent
             return
+        }
         background = inset.createObject(row)
-        leftPadding = 16
+        leftPadding = 16 + indent
         rightPadding = 16
         topPadding = 8
         bottomPadding = 8

@@ -55,6 +55,11 @@ tidy:
 # On Cygwin, it is built with the MinGW build of Qt for Windows, in
 # launcher-win: QT is the folder of that Qt, by default the newest in
 # C:\Qt
+# The make that CMake runs shares the jobs of make -jN when the jobserver
+# is a FIFO, as from GNU make 4.4; CMake does not pass on the pipe of an
+# older make, so the make that it runs then takes as many jobs as it can.
+# V=1 shows the commands, the messages of CMake and the commands that it
+# runs, as the scripts of the Cygwin targets show theirs
 CMAKE = cmake
 CMAKE_FLAGS =
 QT =
@@ -63,9 +68,26 @@ launcher: all
 	$(srcdir)/cygwin/launcher.sh build '$(QT)'
 else
 launcher: all
+	@if [ "$${V:-0}" = 0 ]; then \
+	    echo "Configuring the launcher in launcher/build"; \
+	    exec >/dev/null; \
+	else \
+	    set -x; \
+	fi; \
 	$(CMAKE) -S $(srcdir)/launcher -B launcher/build \
 	    -DPOWWOW_BUILD_PROGRAM='$(abs_builddir)/src/powwow' $(CMAKE_FLAGS)
-	$(CMAKE) --build launcher/build --parallel
+	@case " $$MAKEFLAGS" in \
+	*--jobserver-auth=fifo:*) parallel= ;; \
+	*) parallel=--parallel ;; \
+	esac; \
+	if [ "$${V:-0}" = 0 ]; then \
+	    echo "Building the launcher in launcher/build"; \
+	    verbose=; \
+	else \
+	    verbose=--verbose; \
+	    set -x; \
+	fi; \
+	$(CMAKE) --build launcher/build $$parallel $$verbose
 endif
 
 # check the sources of the launcher with clang-tidy, with the checks of
@@ -137,12 +159,15 @@ help:
 	@echo '  make check TESTS=test_ptr  run a single test'
 	@echo '  The results are in src/test-suite.log and src/<test>.log.'
 	@echo ''
-if CYGWIN
 	@echo 'Showing the commands:'
+if CYGWIN
 	@echo '  make V=1 [TARGET]  also show the commands that the scripts of the'
 	@echo '                     cygwin targets run, as they run them'
-	@echo ''
+else
+	@echo '  make V=1 launcher  also show the commands that building the'
+	@echo '                     launcher runs, and the messages of CMake'
 endif
+	@echo ''
 	@echo 'Available targets:'
 	@echo '  all               build powwow and its files, but not the launcher'
 	@echo '                    (the default)'

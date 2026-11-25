@@ -3070,7 +3070,9 @@ is a prompt.
 An exception is a MUD that ends its prompts with the telnet command
 GA (go ahead), as MUME does: an incomplete line with a GA after it is
 finished, so the text after it starts a line of its own, even with no
-newline before it.
+newline before it, unless a backspace or a carriage return at the end
+of the prompt or the start of the text moves back to write over it, as
+MUME's spinning bar does.
 
 When powwow receives a line (either full or incomplete),
 its beginning part may be a prompt, so it matches `#prompts` on the line.

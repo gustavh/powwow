@@ -84,7 +84,9 @@ The user-visible changes in each release; those up to 1.3.2 are in
   Wireshark and tcpdump.
 * A telnet GA after a prompt ends it, so that text after it with no
   newline before it, such as MUME's prompt after the prompt of its
-  pager, starts a line of its own.
+  pager, starts a line of its own, unless the MUD moves back with a
+  backspace or a carriage return to write over the prompt, as MUME's
+  spinning bar does.
 * CHARSET: powwow sends its REQUEST with its WILL CHARSET, as soon as
   the MUD sends DO CHARSET, without waiting for WILL CHARSET, which
   saves the MUD a round trip.

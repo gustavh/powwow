@@ -1825,7 +1825,6 @@ static int process_first_fragment(char *buf, int got, bool after_ga)
          * (assuming we have a line splitted into those parts)
          * then clear the prompt.
          */
-        char *spinning = NULL;
 
         /* find the end of the first line. include the final newline. */
         char *lineend = strchr(buf, '\n');
@@ -1834,17 +1833,22 @@ static int process_first_fragment(char *buf, int got, bool after_ga)
         else
             lineend = buf + got;
 
-        if (isprompt_len != 0 || after_ga) {
+        /* the cursor moves back to write over the prompt, at its end, as
+         * the spinning bar of MUME does with \b, or at the start of what
+         * follows, as its percentage of a search does with \r: what
+         * follows goes on it */
+        bool overwritten = (promptlen != 0
+                            && (promptstr[promptlen - 1] == '\b'
+                                || promptstr[promptlen - 1] == '\r'))
+                           || *buf == '\b' || *buf == '\r';
+        if (isprompt_len != 0 || (after_ga && !overwritten)) {
             /*
              * either #isprompt _was_ executed, or a telnet GA ended the
-             * prompt, or we got a MUME spinning bar.
-             * in all cases, don't try to merge.
-             *
-             * print a newline (to keep the old prompt on screen)
-             * only if !opt_compact and we didn't get a MUME spinning bar.
+             * prompt: don't try to merge, and print a newline (to keep
+             * the old prompt on screen) unless opt_compact
              */
             clear_input_line(opt_compact);
-            if (spinning == NULL && !opt_compact)
+            if (!opt_compact)
                 prompt_newline();
             sgr_prompt_commit(promptstr, promptlen);
             promptzero();

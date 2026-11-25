@@ -3434,6 +3434,48 @@ EOF
     has 'HP:>'
     has 'Next>'
 
+    # a MUD that writes over its prompts, each with a telnet GA after it,
+    # as MUME does: a bar that spins while casting, a character and a
+    # backspace, and the percentage of a search, after a carriage return
+    cat > "$tmp/server.py" <<'EOF'
+import os, socket, sys, time
+s = socket.socket()
+s.bind(('127.0.0.1', 0))
+s.listen(1)
+with open(sys.argv[1] + '.new', 'w') as f:
+    f.write(str(s.getsockname()[1]))
+os.rename(sys.argv[1] + '.new', sys.argv[1])
+c, _ = s.accept()
+for bar in b'/-\\|':
+    c.sendall(bytes([bar]) + b'\b\xff\xf9')
+    time.sleep(0.2)
+c.sendall(b' \b14%\xff\xf9')
+time.sleep(0.2)
+c.sendall(b'\r\x0031%\xff\xf9')
+time.sleep(0.2)
+c.sendall(b'\r\x00\x1b[KDone.\r\nBye\r\n')
+c.close()
+EOF
+    name='a prompt after a telnet GA is written over after a backspace or a carriage return'
+    rm -f "$tmp/port"
+    python3 -I "$tmp/server.py" "$tmp/port" &
+    server=$!
+    i=0
+    until [ -s "$tmp/port" ] || [ $i -ge 500 ]; do
+        sleep 0.01
+        i=$((i + 1))
+    done
+    : > "$tmp/raw"
+    {
+        printf '#connect m --no-tls 127.0.0.1 %s\n' "$(cat "$tmp/port")"
+        wait_for 'Bye'
+        printf '#quit\n'
+    } | "$POWWOW" > "$tmp/raw" 2>&1
+    wait $server
+    sed -e "s/$esc\[[0-9;?]*[A-Za-z]//g" "$tmp/raw" > "$tmp/out"
+    grep -q "^/$cr-$cr.*|${cr}14%${cr}31%$cr.*Done\.\$" "$tmp/out" \
+        || fail 'expected the prompts and Done. on one line'
+
     # a MUD that sends a prompt with a telnet GA after it
     cat > "$tmp/server.py" <<'EOF'
 import os, socket, sys, time

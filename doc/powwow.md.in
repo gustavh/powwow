@@ -86,8 +86,8 @@ in another session.
 
 Before the definition file, powwow reads the user-wide settings file, which
 has the settings for all MUDs: the command options, such as
-`#option editor=`, the secrets of `#secret`, `#option save`, and the
-attributes of `#hilite`. It is written like a definition file, and kept
+`#option editor=`, the secrets of `#secret`, `#option save`, the
+attributes of `#hilite`, and the rules of `#editsuffix`. It is written like a definition file, and kept
 where each system keeps the settings of an app:
 
 | System | User-wide settings file |
@@ -961,6 +961,7 @@ has a few side effects.
 | `bind` | clear all key bindings and restore the default ones, also for the editing keys |
 | `bind <key>` | reset the key to its default binding, or delete it if it has none |
 | `bind --missing` | add the default keys that are not bound, by name or sequence, and keep the other keys |
+| `editsuffix` | clear all the MUD's own rules of `#editsuffix` |
 | `in` | clear all delayed commands, like `at` |
 | `mark` | clear all markers |
 | `prompt` | clear all prompts |
@@ -1442,6 +1443,44 @@ otherwise, only the given session is cancelled. The corresponding
 editor processes are brutally killed. Sessions already cancelled, whose
 editor has not ended yet, are left alone.
 
+### Set the suffixes of the files to edit
+
+```
+#editsuffix [<regexp>[=[<suffix>]]]
+```
+
+The temporary file of a text that the MUD sends to edit or view ends in
+a suffix, so that the editor or the pager can tell what the text is,
+such as to highlight it: the suffix of the first rule whose Extended
+POSIX regexp matches the title of the text, else `.txt`. In the suffix,
+`$0` is the title, `$1` the text that the regexp matched, and `$2`...
+its submatches, as for regexp actions. Once they are replaced, the
+suffix must be a `.` followed by letters, digits, `_` and `-`, at most
+16 characters in all, as the title comes from the MUD; a rule that gives
+one that is not is passed over with a warning, and the next rule is
+tried. The regexp is unescaped as those of `#action` are.
+
+A rule typed or in a definition file is the MUD's own; the MUD's own
+rules come first, then the user-wide ones of the user-wide settings
+file. The user-wide rules are, until that file changes them:
+
+```
+#editsuffix ^Edit mudlle file=.mud
+#editsuffix [.][[:alpha:]][[:alnum:]]*$=$1
+```
+
+The second gives a title that ends in a file name with an extension,
+such as `View file scripts/git-state.sh`, that extension, `.sh`. In the
+user-wide settings file, `#editsuffix <regexp>=` deletes a rule, also
+one of those, and a new rule comes before them.
+
+```
+#editsuffix ^Edit room=.room            (the description of a room)
+#editsuffix ^Edit room                  (lets you edit the above rule)
+#editsuffix ^Edit room=                 (deletes it)
+#editsuffix                             (lists the rules)
+```
+
 ### List/turn various options on/off
 
 ```
@@ -1488,7 +1527,7 @@ other lines.
 
 The editor and the pager get the text in a temporary file, whose name
 is their last argument, in the directory `TMPDIR`, or `/tmp` if it is
-not set, and the description of the text from the MUD in the
+not set, with a suffix such as `.txt` (see `#editsuffix`), and the description of the text from the MUD in the
 environment variable `TITLE`. With `--windows`, they run as `#!` runs its
 commands, with `shell`, followed by the Windows path of the file in
 double quotes; and a byte order mark at the start of the edited text, and

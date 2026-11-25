@@ -105,6 +105,7 @@ bind <key>      reset the key to its default binding, or delete it
                 if it has none
 bind --missing  add the default keys that are not bound, by name or
                 sequence, and keep the other keys
+editsuffix      clear all the MUD's own rules of ‘#editsuffix’
 in              clear all delayed commands, like at
 mark            clear all markers
 prompt          clear all prompts
@@ -792,6 +793,23 @@ counter, and ‘#n’ uses a number, like ‘#5 buy bread’.
 
 Show your active editing sessions, with a brief description and their
 number.
+@editsuffix
+#editsuffix [<regexp>[=[<suffix>]]]
+
+Set the suffix of the temporary file of a text that the MUD sends to
+edit or view, so that the editor can tell what it is: that of the first
+rule whose regexp matches the title of the text, else ‘.txt’. In the
+suffix, ‘$0’ is the title, ‘$1’ the match and ‘$2’... its submatches.
+The MUD's own rules, typed or in the definition file, come before the
+user-wide ones of the user-wide settings file, which are by default:
+
+#editsuffix ^Edit mudlle file=.mud
+#editsuffix [.][[:alpha:]][[:alnum:]]*$=$1      (git-state.sh gives .sh)
+
+#editsuffix ^Edit room=.room            (the description of a room)
+#editsuffix ^Edit room                  (lets you edit the above rule)
+#editsuffix ^Edit room=                 (deletes it)
+#editsuffix                             (lists the rules)
 @file
 #file [=[<filename>]]
 

@@ -2021,6 +2021,7 @@ int read_settings(void)
         delete_keynode(&keydefs);
     while (substitutions != NULL)
         delete_substnode(&substitutions);
+    reset_edit_suffixes();
     /* the file's own #hilite, if any, over the user-wide ones */
     input_hilite.own = message_hilite.own = false;
     hilite_update();
@@ -2240,8 +2241,8 @@ static const struct attr *user_hilite(const struct hilite *h)
 /*
  * save the user-wide settings, which the user-wide settings file has: the
  * command options, such as editor, the user-wide on/off options, such as
- * save, the user-wide #hilite, and the secrets of #secret; return > 0 on
- * success, < 0 on failure
+ * save, the user-wide #hilite, the secrets of #secret, and the user-wide
+ * rules of #editsuffix; return > 0 on success, < 0 on failure
  */
 static int save_config(void)
 {
@@ -2259,6 +2260,8 @@ static int save_config(void)
         failed = fprintf(f, "#setvar keepalive=%d\n", keepalive_user);
     if (failed > 0)
         failed = write_secrets(f);
+    if (failed > 0)
+        failed = save_edit_suffixes(f, false, true, true);
     if (failed > 0)
         failed = print_options(f, OPTIONS_GLOBAL);
     failed = finish_temp(f, failed, config_file);
@@ -2493,6 +2496,11 @@ int save_settings(void)
         }
         failed = fprintf(f, "#substitute %s\n", ptrdata(pp));
     }
+
+    /* the MUD's own, then the user-wide ones that are not the defaults,
+     * unless they go in the user-wide settings file */
+    if (failed > 0)
+        failed = save_edit_suffixes(f, true, !split, false);
     /* save value of global variables */
 
     bool flag = false;

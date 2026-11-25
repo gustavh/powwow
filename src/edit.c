@@ -1105,8 +1105,8 @@ static void complete_reset(struct word_list *l, int arg, const char *args,
                            const char *word)
 {
     static const char *const lists[] = {
-        "action", "alias", "all", "at", "bind", "in", "mark", "prompt",
-        "substitute", "var",
+        "action", "alias", "all", "at", "bind", "editsuffix", "in", "mark",
+        "prompt", "substitute", "var",
     };
     if (arg == 0) {
         for (size_t i = 0; i < sizeof(lists) / sizeof(*lists); ++i)

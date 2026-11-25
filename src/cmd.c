@@ -58,7 +58,7 @@
 static void F(help), F(action), F(add),
   F(addstatic), F(alias), F(at), F(beep), F(bind),
   F(cancel), F(capture), F(clear), F(connect), F(cpu),
-  F(do), F(delim), F(edit), F(emulate), F(exe),
+  F(do), F(delim), F(edit), F(editsuffix), F(emulate), F(exe),
   F(file), F(for), F(hilite), F(history), F(host),
   F(identify), F(if), F(in), F(init), F(isprompt),
   F(key), F(keyedit),
@@ -132,6 +132,9 @@ static cmdstruct default_commands[] =
       "(<expr>) <command>\trepeat <command> <expr> times"),
     C("edit",       cmd_edit,
       "\tlist editing sessions"),
+    C("editsuffix", cmd_editsuffix,
+      "[<regexp>[=[<suffix>]]]\tdelete/list/define the suffixes of the"
+      " files to edit"),
     C("emulate",    cmd_emulate,
       "[<|!]{<text>|(<expr>)}\tprocess result as if received from host"),
     C("exe",        cmd_exe,
@@ -1628,8 +1631,8 @@ static void reset_usage(const char *arg)
         message_printf("#reset: must specify one of:\n");
     else
         wrap_printf("#reset: unknown list \"%s\", must specify one of:", arg);
-    tty_puts(" action, alias, all, at, bind [<key>|--missing], in, mark,"
-             " prompt, substitute, var.\n");
+    tty_puts(" action, alias, all, at, bind [<key>|--missing], editsuffix,"
+             " in, mark, prompt, substitute, var.\n");
 }
 
 static void cmd_reset(char *arg)
@@ -1671,6 +1674,11 @@ static void cmd_reset(char *arg)
             delete_keynode(&keydefs);
         tty_add_initial_binds();
         tty_add_walk_binds();
+        if (!all)
+            return;
+    }
+    if (all || strcmp(arg, "editsuffix") == 0) {
+        reset_edit_suffixes();
         if (!all)
             return;
     }
@@ -1750,6 +1758,11 @@ static void cmd_stop(char *arg)
     if (opt_info) {
         message_printf("#all delayed labels are now disabled.\n");
     }
+}
+
+static void cmd_editsuffix(char *arg)
+{
+    parse_edit_suffix(arg);
 }
 
 static void cmd_substitute(char *arg)
@@ -3441,7 +3454,7 @@ void keepalive_update(void)
 /*
  * the user-wide settings as when powwow starts, before the user-wide
  * settings file is read again: the command options not set, #option save
- * on, no user-wide #hilite, and no secrets
+ * on, no user-wide #hilite, no secrets, and the default #editsuffix rules
  */
 void reset_user_wide_settings(void)
 {
@@ -3457,6 +3470,7 @@ void reset_user_wide_settings(void)
     keepalive_update();
     while (secret_count() > 0)
         secret_delete(0);
+    reset_user_edit_suffixes();
 }
 
 static void cmd_option(char *arg);

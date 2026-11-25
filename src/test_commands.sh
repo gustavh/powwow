@@ -4504,6 +4504,140 @@ TMPDIR=$tmp
 grep -Eq '^#editor: in TMPDIR powwow-edit-5-[^/]{6}(\.txt)?$' "$tmp/out" \
     || fail "the file is not in TMPDIR"
 
+# the MUD sends a text to edit titled $1, or to view with --view; the
+# editor and the pager print the name of its temporary file
+printf 'read -r identify\ncat "$1"\ncat > /dev/null\n' > "$tmp/server"
+mud_text() {
+    if [ "$1" = --view ]; then
+        kind=EV
+        body="$2
+text
+"
+    else
+        kind=EE
+        body="M5
+$1
+text
+"
+    fi
+    printf '~$#%s%d\n%s' "$kind" "${#body}" "$body" > "$tmp/message"
+}
+# the name of the temporary file must end with the suffix $1
+has_suffix() {
+    grep -Eq "file .*/powwow-(edit-5|view)-[^/]{6}\\$1\$" "$tmp/out" \
+        || fail "no file with the suffix $1"
+}
+
+mud_text 'Edit mudlle file rooms/17486'
+run --until 'file ' '#editsuffix: a default rule' \
+    "#option editor=echo file
+#spawn n sh $tmp/server $tmp/message
+##n #request editor"
+has_suffix .mud
+
+mud_text --view 'View file /home/arda/run/lib/scripts/git-state.sh'
+run --until 'file ' '#editsuffix: the extension of a file to view' \
+    "#option pager=echo file
+#spawn n sh $tmp/server $tmp/message
+##n #request editor"
+has_suffix .sh
+
+mud_text 'Description of room 1.5'
+run --until 'file ' '#editsuffix: .txt when no rule matches' \
+    "#option editor=echo file
+#spawn n sh $tmp/server $tmp/message
+##n #request editor"
+has_suffix .txt
+
+# the MUD's own rules come first; one whose suffix would not be valid
+# is passed over with a warning
+mud_text 'Edit mudlle file rooms/17486'
+run --until 'file ' "#editsuffix: the MUD's own rules first" \
+    "#option editor=echo file
+#editsuffix ^Edit=.\$0
+#editsuffix ^Edit (mud)(lle)=.\$2-\$3
+#spawn n sh $tmp/server $tmp/message
+##n #request editor"
+has_suffix .mud-lle
+has '#warning: #editsuffix ^Edit=.$0 gives no valid suffix for "Edit mudlle file rooms/17486"'
+
+# #editsuffix lists the MUD's own rules, then the user-wide ones, of the
+# user-wide settings file, where those it adds come before the defaults;
+# with --config, that file keeps the defaults it deletes and the rules
+# that are not defaults, and the definition file the MUD's own
+cat > "$tmp/sfx.conf" <<'EOF'
+#hilite input none
+#hilite messages none
+#editsuffix ^Edit mudlle file=
+#editsuffix ^Help=.md
+EOF
+printf '#editsuffix ^Room=.room\n' > "$tmp/sfx.pw"
+run --args "--config=$tmp/sfx.conf $tmp/sfx.pw" \
+    '#editsuffix: the rules of the MUD and the user-wide ones' \
+    '#editsuffix
+#option editor=vi
+#save'
+has '#the following edit suffix is defined:'
+has '#editsuffix ^Room=.room'
+lacks '#editsuffix ^Edit mudlle file=.mud'
+[ "$(sed -n '/^#the following user-wide edit suffixes are defined:$/{n;p;n;p;}' "$tmp/out")" = \
+'#editsuffix ^Help=.md
+#editsuffix [.][[:alpha:]][[:alnum:]]*$=$1' ] \
+    || fail 'expected the rule of the user before the default'
+grep -Fxq '#editsuffix ^Edit mudlle file=' "$tmp/sfx.conf" \
+    || fail 'expected the deleted default in the user-wide settings file'
+grep -Fxq '#editsuffix ^Help=.md' "$tmp/sfx.conf" \
+    || fail 'expected the user-wide rule in the user-wide settings file'
+grep -Fq '[.]' "$tmp/sfx.conf" \
+    && fail 'expected no unchanged default in the user-wide settings file'
+grep -Fxq '#editsuffix ^Room=.room' "$tmp/sfx.pw" \
+    || fail "expected the MUD's own rule in the definition file"
+grep -Fq 'Help' "$tmp/sfx.pw" \
+    && fail 'expected no user-wide rule in the definition file'
+
+# without --config, #save puts the user-wide rules that are not defaults
+# in the definition file too
+printf '#editsuffix ^Help=.md\n' >> "$tmp/.config/powwow/powwow.conf"
+printf '#editsuffix ^Room=.room\n' > "$tmp/sfx.pw"
+run --args "$tmp/sfx.pw" '#editsuffix: #save without --config' '#save'
+[ "$(grep '^#editsuffix' "$tmp/sfx.pw")" = '#editsuffix ^Room=.room
+#editsuffix ^Help=.md' ] \
+    || fail "expected the MUD's own rule, then the user-wide one"
+no_hilite
+
+run '#editsuffix: a rule changed and deleted' '#option +info
+#editsuffix ^Room=.room
+#editsuffix ^Room=.rm
+#editsuffix ^Room=
+#editsuffix ^x=$2x
+#editsuffix ^Room=
+#editsuffix ^Nope
+#editsuffix ^Edit mudlle file='
+has '#new edit suffix: ^Room=.room'
+has '#changed edit suffix: ^Room=.rm'
+has '#deleting edit suffix: ^Room=.rm'
+has '#new edit suffix: ^x=$2x'
+has '#unknown edit suffix, cannot delete: "^Room"'
+has '#unknown edit suffix, cannot show: "^Nope"'
+has '#unknown edit suffix, cannot delete: "^Edit mudlle file"'
+
+# any suffix, which is checked when it is used
+run '#editsuffix: any suffix, but not a bad regexp' '#option +info
+#editsuffix ^x=txt
+#editsuffix a[=.x
+#editsuffix =.x
+#editsuffix'
+has '#new edit suffix: ^x=txt'
+grep -q '^#regexp error: ' "$tmp/out" || fail 'expected a regexp error'
+has '#editsuffix: the pattern must be non-empty.'
+has '#the following edit suffix is defined:'
+has '#editsuffix ^x=txt'
+
+run '#reset editsuffix' '#editsuffix ^Room=.room
+#reset editsuffix
+#editsuffix'
+has '#no edit suffixes are defined.'
+
 # every command must have a help entry with the syntax shown by #help, and
 # the manual must have it too, except for the commands it does not show
 name='every command has the same syntax in the help'

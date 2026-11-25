@@ -192,8 +192,8 @@ AC_CHECK_FUNC([cygwin_conv_path],
 # nothing stops two sessions from saving the same file
 AC_CHECK_FUNCS([flock])
 
-# mkstemps(), which names the temporary files of the editor and the pager
-# with .txt at the end, as Windows and editors take for text
+# mkstemps(), which ends the names of the temporary files of the editor
+# and the pager with a suffix, such as .txt, that editors go by
 AC_CHECK_FUNCS([mkstemps])
 
 # Dynamic modules, except on Cygwin, where a DLL cannot use the symbols

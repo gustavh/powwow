@@ -17,6 +17,11 @@ const char *editor_command(bool view, bool builtin, const char **from);
 int edit_output_fds(fd_set *set, int max_fd);
 /* show the output of background editors ready in 'set'; return how many */
 int edit_read_output(const fd_set *set);
+/* the #editsuffix command, and the rules it defines */
+void parse_edit_suffix(char *arg);
+void reset_edit_suffixes(void);
+void reset_user_edit_suffixes(void);
+int save_edit_suffixes(FILE *f, bool mud, bool user, bool deleted);
 
 extern char edit_start[];
 extern char edit_end[];

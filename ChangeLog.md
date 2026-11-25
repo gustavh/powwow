@@ -31,9 +31,9 @@ The user-visible changes in each release; those up to 1.3.2 are in
     default `~/.config/powwow`, elsewhere.
   * With `--config`, as the launcher starts powwow, the user-wide
     settings (the options `editor`, `pager`, `help-pager`, `shell` and
-    `save`, `#secret` and `#hilite`) are saved there instead of in the
-    definition file; `--config=FILE` uses another file, and
-    `--no-config` none.
+    `save`, `#secret`, `#hilite` and `#editsuffix`) are saved there
+    instead of in the definition file; `--config=FILE` uses another
+    file, and `--no-config` none.
   * A `#hilite` typed or in the definition file is the MUD's own, which
     wins over the user-wide one.
 * `#setvar keepalive` in the user-wide settings file sets the keepalive
@@ -72,6 +72,11 @@ The user-visible changes in each release; those up to 1.3.2 are in
   texts to edit or view that the MUD sends, and of the edited texts,
   instead of `#setvar mem`, 1048576 by default, as MUME sends longer
   ones.
+* `#editsuffix` sets the suffix of the temporary file of a text the
+  MUD sends to edit or view, which is named after it, from its title,
+  so that the editor can tell what it is: by default, `Edit mudlle
+  file` gives `.mud`, a file name at the end of the title its
+  extension, such as `.sh`, and other titles `.txt`.
 * `#capture --telnet <file>` writes the bytes the MUD sends, with the
   telnet commands, such as IAC GA after a prompt.
 * `#capture --pcap <file>` writes the bytes the MUD sends and those

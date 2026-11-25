@@ -38,6 +38,7 @@
 #include "eval.h"
 #include "charset.h"
 #include "cmd.h"
+#include "regexlib.h"
 
 editsess *edit_sess;            /* head of session list */
 
@@ -467,6 +468,332 @@ const char *editor_command(bool view, bool builtin, const char **from)
     return editor;
 }
 
+/* the longest suffix of a temporary file, with its . */
+#define SUFFIX_MAX 16
+
+/*
+ * a rule of #editsuffix: the temporary file of a text from the MUD whose
+ * title matches the regexp 'pattern' ends in 'suffix', where $0 is the
+ * title, $1 the match and $2..$9 its groups, as for #action
+ */
+typedef struct suffixnode {
+    struct suffixnode *next;
+    char *pattern;                      /* as given, not unescaped */
+    char *suffix;
+#ifdef USE_REGEXP
+    regex_t regexp;
+#endif
+} suffixnode;
+
+/* the MUD's own rules, which come first, and the user-wide ones, which
+ * start as the defaults */
+static suffixnode *suffix_mud, *suffix_user;
+static bool suffix_user_ready;          /* suffix_user has been set */
+
+#ifdef USE_REGEXP
+static const struct {
+    const char *pattern, *suffix;
+} suffix_defaults[] = {
+    { "^Edit mudlle file",            ".mud" },
+    { "[.][[:alpha:]][[:alnum:]]*$", "$1" },
+};
+#define SUFFIX_DEFAULTS (sizeof(suffix_defaults) / sizeof(*suffix_defaults))
+
+/* the default rule with the pattern 'pattern', or -1 */
+static int suffix_default(const char *pattern)
+{
+    for (size_t i = 0; i < SUFFIX_DEFAULTS; ++i) {
+        if (strcmp(pattern, suffix_defaults[i].pattern) == 0)
+            return (int)i;
+    }
+    return -1;
+}
+
+/*
+ * compile the regexp 'pattern', unescaped as #action does, in 're';
+ * return false, having said why, if it is not valid
+ */
+static bool suffix_regcomp(const char *pattern, regex_t *re)
+{
+    char unesc[BUFSIZE];
+    my_strncpy(unesc, pattern, BUFSIZE - 1);
+    unescape(unesc);
+#ifdef REG_UTF
+    /* PCRE2: match UTF-8 characters, not bytes */
+    const int cflags = REG_EXTENDED | REG_UTF;
+#else
+    const int cflags = REG_EXTENDED;
+#endif
+    int errcode = regcomp(re, unesc, cflags);
+    if (errcode == 0)
+        return true;
+    char why[BUFSIZE];
+    regerror(errcode, re, why, sizeof why);
+    message_printf("#regexp error: %s\n", why);
+    return false;
+}
+
+static suffixnode **lookup_suffix(suffixnode **np, const char *pattern)
+{
+    while (*np != NULL && strcmp((*np)->pattern, pattern) != 0)
+        np = &(*np)->next;
+    return np;
+}
+#endif
+
+static void delete_suffixnode(suffixnode **np)
+{
+    suffixnode *n = *np;
+    *np = n->next;
+#ifdef USE_REGEXP
+    regfree(&n->regexp);
+#endif
+    free(n->pattern);
+    free(n->suffix);
+    free(n);
+}
+
+/* the user-wide rules, the defaults until they are changed */
+static suffixnode **suffix_user_rules(void)
+{
+    if (suffix_user_ready)
+        return &suffix_user;
+    suffix_user_ready = true;
+#ifdef USE_REGEXP
+    suffixnode **tail = &suffix_user;
+    for (size_t i = 0; i < SUFFIX_DEFAULTS; ++i) {
+        suffixnode *n = xmalloc(sizeof *n);
+        if (!suffix_regcomp(suffix_defaults[i].pattern, &n->regexp)) {
+            free(n);
+            continue;
+        }
+        n->pattern = xstrdup(suffix_defaults[i].pattern);
+        n->suffix = xstrdup(suffix_defaults[i].suffix);
+        n->next = NULL;
+        *tail = n;
+        tail = &n->next;
+    }
+#endif
+    return &suffix_user;
+}
+
+/* delete the MUD's own rules of #editsuffix */
+void reset_edit_suffixes(void)
+{
+    while (suffix_mud != NULL)
+        delete_suffixnode(&suffix_mud);
+}
+
+/* set the user-wide rules of #editsuffix back to the defaults */
+void reset_user_edit_suffixes(void)
+{
+    while (suffix_user != NULL)
+        delete_suffixnode(&suffix_user);
+    suffix_user_ready = false;
+}
+
+/*
+ * write the rules of #editsuffix to 'f': the MUD's own, if 'mud', then the
+ * user-wide ones, if 'user', those that are not defaults, after the
+ * defaults they delete if 'deleted'; return as fprintf() last did, or 1
+ */
+int save_edit_suffixes(FILE *f, bool mud, bool user, bool deleted)
+{
+    int failed = 1;
+    for (suffixnode *n = mud ? suffix_mud : NULL; n != NULL && failed > 0;
+         n = n->next) {
+        failed = fprintf(f, "#editsuffix %s=%s\n", n->pattern, n->suffix);
+    }
+    if (!user)
+        return failed;
+#ifdef USE_REGEXP
+    suffixnode **list = suffix_user_rules();
+    for (size_t i = 0; deleted && i < SUFFIX_DEFAULTS && failed > 0; ++i) {
+        if (*lookup_suffix(list, suffix_defaults[i].pattern) == NULL) {
+            failed = fprintf(f, "#editsuffix %s=\n",
+                             suffix_defaults[i].pattern);
+        }
+    }
+    for (suffixnode *n = *list; n != NULL && failed > 0; n = n->next) {
+        int i = suffix_default(n->pattern);
+        if (i < 0 || strcmp(n->suffix, suffix_defaults[i].suffix) != 0) {
+            failed = fprintf(f, "#editsuffix %s=%s\n", n->pattern,
+                             n->suffix);
+        }
+    }
+#else
+    (void)deleted;
+#endif
+    return failed;
+}
+
+/* list the rules of #editsuffix */
+static void show_edit_suffixes(void)
+{
+    suffixnode *lists[] = { suffix_mud, *suffix_user_rules() };
+    const char *kinds[] = { "", "user-wide " };
+    for (int i = 0; i < 2; ++i) {
+        message_printf("#%s %sedit suffix%s defined%c\n",
+                       lists[i] != NULL ? "the following" : "no", kinds[i],
+                       (lists[i] != NULL && lists[i]->next == NULL
+                        ? " is"
+                        : "es are"),
+                       lists[i] != NULL ? ':' : '.');
+        for (suffixnode *n = lists[i]; n != NULL; n = n->next)
+            tty_message("#editsuffix %s=%s\n", n->pattern, n->suffix);
+    }
+}
+
+/*
+ * the #editsuffix command: list the rules, show one, or define or delete
+ * one, user-wide in the user-wide settings file, else the MUD's own
+ */
+void parse_edit_suffix(char *arg)
+{
+    arg = skipspace(arg);
+    if (*arg == '\0') {
+        show_edit_suffixes();
+        return;
+    }
+#ifndef USE_REGEXP
+    message_printf("#error: regexp not allowed\n");
+#else
+    char *eq = first_regular(arg, '=');
+    if (*eq == '\0') {
+        suffixnode *n = *lookup_suffix(&suffix_mud, arg);
+        if (n == NULL)
+            n = *lookup_suffix(suffix_user_rules(), arg);
+        if (n == NULL) {
+            wrap_printf("#unknown edit suffix, cannot show: \"%s\"", arg);
+            return;
+        }
+        fmt_next_edit("#editsuffix %s=%s", n->pattern, n->suffix);
+        return;
+    }
+    *eq = '\0';
+    const char *suffix = eq + 1;
+    if (*arg == '\0') {
+        message_printf("#editsuffix: the pattern must be non-empty.\n");
+        return;
+    }
+
+    bool user = reading_config;
+    suffixnode **list = user ? suffix_user_rules() : &suffix_mud;
+    const char *kind = user ? "user-wide edit suffix" : "edit suffix";
+    suffixnode **np = lookup_suffix(list, arg);
+    if (*suffix == '\0') {
+        if (*np == NULL) {
+            wrap_printf("#unknown %s, cannot delete: \"%s\"", kind, arg);
+            return;
+        }
+        if (opt_info) {
+            wrap_printf("#deleting %s: %s=%s", kind, (*np)->pattern,
+                        (*np)->suffix);
+        }
+        delete_suffixnode(np);
+        return;
+    }
+    if (*np != NULL) {
+        free((*np)->suffix);
+        (*np)->suffix = xstrdup(suffix);
+        if (opt_info)
+            wrap_printf("#changed %s: %s=%s", kind, arg, suffix);
+        return;
+    }
+
+    suffixnode *n = xmalloc(sizeof *n);
+    if (!suffix_regcomp(arg, &n->regexp)) {
+        free(n);
+        return;
+    }
+    n->pattern = xstrdup(arg);
+    n->suffix = xstrdup(suffix);
+    /* the user-wide ones of the user before the defaults, as they come
+     * back when the user-wide settings file is read */
+    if (user) {
+        np = list;
+        while (*np != NULL && suffix_default((*np)->pattern) < 0)
+            np = &(*np)->next;
+    }
+    n->next = *np;
+    *np = n;
+    if (opt_info)
+        wrap_printf("#new %s: %s=%s", kind, arg, suffix);
+#endif
+}
+
+#ifdef USE_REGEXP
+/*
+ * the suffix that the rule 'n' gives to the title 'title', which it
+ * matched as 'm', in 'buf' of SUFFIX_MAX + 1 bytes; return false if it is
+ * not a . then 1 to SUFFIX_MAX - 1 letters, digits, _ and -, as the title
+ * comes from the MUD
+ */
+static bool expand_suffix(const suffixnode *n, const char *title,
+                          const regmatch_t *m, char *buf)
+{
+    size_t len = 0;
+    for (const char *p = n->suffix; *p != '\0'; ++p) {
+        const char *s = p;
+        size_t slen = 1;
+        if (*p == '$' && isdigit((unsigned char)p[1])) {
+            int i = *++p - '0';
+            if (i == 0) {
+                s = title;
+                slen = strlen(title);
+            } else if (i - 1 <= (int)n->regexp.re_nsub
+                       && i - 1 < PARAM_COUNT - 1 && m[i - 1].rm_so >= 0) {
+                s = title + m[i - 1].rm_so;
+                slen = m[i - 1].rm_eo - m[i - 1].rm_so;
+            } else {
+                slen = 0;
+            }
+        }
+        if (slen > SUFFIX_MAX - len)
+            return false;
+        memcpy(buf + len, s, slen);
+        len += slen;
+    }
+    buf[len] = '\0';
+    if (len < 2 || buf[0] != '.')
+        return false;
+    for (size_t i = 1; i < len; ++i) {
+        unsigned char c = buf[i];
+        if (c >= 0x80 || (!isalnum(c) && c != '_' && c != '-'))
+            return false;
+    }
+    return true;
+}
+#endif
+
+/*
+ * the suffix of the temporary file of a text from the MUD with the title
+ * 'title', in UTF-8, in 'buf' of SUFFIX_MAX + 1 bytes: as the first rule
+ * of #editsuffix whose pattern matches it gives, the MUD's own before the
+ * user-wide ones, else .txt; a rule that gives no valid suffix is passed
+ * over with a warning
+ */
+static void edit_suffix(const char *title, char *buf)
+{
+#ifdef USE_REGEXP
+    suffixnode *lists[] = { suffix_mud, *suffix_user_rules() };
+    for (int i = 0; i < 2; ++i) {
+        for (suffixnode *n = lists[i]; n != NULL; n = n->next) {
+            regmatch_t m[PARAM_COUNT - 1];
+            if (regexec(&n->regexp, title, PARAM_COUNT - 1, m, 0) != 0)
+                continue;
+            if (expand_suffix(n, title, m, buf))
+                return;
+            wrap_printf("#warning: #editsuffix %s=%s gives no valid suffix"
+                        " for \"%s\"", n->pattern, n->suffix, title);
+        }
+    }
+#else
+    (void)title;
+#endif
+    strcpy(buf, ".txt");
+}
+
 /*
  * print the 'len' bytes of 'text' that the MUD of 'conn' sent to view, as
  * the lines that it sends, without running the actions on them
@@ -554,6 +881,20 @@ void message_edit(connsess *conn, char *text, int msglen, bool view,
         return;
     }
 
+    /* the title, which we keep as UTF-8 */
+    char *utf8_descr;
+    if (builtin) {
+        utf8_descr = xstrdup(descr);
+    } else {
+        size_t dlen = strlen(descr);
+        utf8_descr = xmalloc(3 * dlen + 1);
+        if (conn != NULL && conn->ideditor_utf8)
+            dlen = utf8_sanitize(descr, dlen, utf8_descr);
+        else
+            dlen = latin1_to_utf8(descr, dlen, utf8_descr);
+        utf8_descr[dlen] = '\0';
+    }
+
     const char *tmpdir = getenv("TMPDIR");
     if (tmpdir == NULL || *tmpdir == '\0')
         tmpdir = "/tmp";
@@ -566,10 +907,12 @@ void message_edit(connsess *conn, char *text, int msglen, bool view,
         snprintf(kind, sizeof kind, "view");
     else
         snprintf(kind, sizeof kind, "edit-%u", key);
+    char suffix[SUFFIX_MAX + 1] = "";
 #ifdef HAVE_MKSTEMPS
-    static const char suffix[] = ".txt";
-#else
-    static const char suffix[] = "";
+    if (builtin)
+        strcpy(suffix, ".txt");
+    else
+        edit_suffix(utf8_descr, suffix);
 #endif
     /* in Windows mode, a TMPDIR as on Windows takes a \\ */
     char sep = windows_mode && strchr(tmpdir, '/') == NULL ? '\\' : '/';
@@ -587,11 +930,13 @@ void message_edit(connsess *conn, char *text, int msglen, bool view,
 #endif
     if (tmpfd < 0) {
         errmsg("cannot create %s", tmpname);
+        free(utf8_descr);
         free(text);
         return;
     }
     if (write(tmpfd, text + i, msglen - i) < msglen - i) {
         errmsg("cannot write %s", tmpname);
+        free(utf8_descr);
         free(text);
         close(tmpfd);
         unlink(tmpname);
@@ -607,19 +952,9 @@ void message_edit(connsess *conn, char *text, int msglen, bool view,
     s->cancel = false;
     s->out_fd = -1;
     s->out_len = 0;
-    /* the editor gets the title as sent; we keep it as UTF-8 */
+    /* the editor gets the title as sent */
     char *title = xstrdup(descr);
-    if (builtin) {
-        s->descr = xstrdup(descr);
-    } else {
-        size_t dlen = strlen(descr);
-        s->descr = xmalloc(3 * dlen + 1);
-        if (conn != NULL && conn->ideditor_utf8)
-            dlen = utf8_sanitize(descr, dlen, s->descr);
-        else
-            dlen = latin1_to_utf8(descr, dlen, s->descr);
-        s->descr[dlen] = '\0';
-    }
+    s->descr = utf8_descr;
     s->file = xstrdup(tmpname);
     free(text);
 

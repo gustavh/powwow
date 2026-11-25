@@ -604,6 +604,7 @@ QVariantMap Launcher::info(const QString &mud) const
         { QT_TR_NOOP("Actions"), { "#action " }, QT_TR_NOOP("No actions") },
         { QT_TR_NOOP("Prompts"), { "#prompt " }, nullptr },
         { QT_TR_NOOP("Substitutions"), { "#substitute " }, nullptr },
+        { QT_TR_NOOP("Edit suffixes"), { "#editsuffix " }, nullptr },
         { QT_TR_NOOP("Marks"), { "#mark " }, nullptr },
         { QT_TR_NOOP("Variables"), { "#(" }, nullptr },
         { QT_TR_NOOP("Keys"), { "#bind " }, nullptr },

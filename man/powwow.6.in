@@ -359,8 +359,10 @@ options, such as
 the secrets of
 .BR #secret ,
 .BR "#option save" ,
-and the attributes of
-.BR #hilite .
+the attributes of
+.BR #hilite ,
+and the rules of
+.BR #editsuffix .
 .B powwow
 reads it before the definition file, which can override them.  When
 .B powwow

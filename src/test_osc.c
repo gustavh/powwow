@@ -142,6 +142,30 @@ int main(void)
     check_filter("C1 controls", "a\xc2\x9d" "8;;x\xc2\x9c" "b", true,
                  "a8;;xb");
     check_filter("no-break space", "a\xc2\xa0" "b", true, "a\xc2\xa0" "b");
+    check_filter("ENQ", "a\x05" "b", true, "ab");
+    check_filter("SGR and others", E "[1;31m" E "[2K" E "[3A" E "[2J" E "[H"
+                 E "[ q" E "[!p" E "[>4;1m" E "[u" E "[2S" "t", true,
+                 E "[1;31m" E "[2K" E "[3A" E "[2J" E "[H" E "[ q" E "[!p"
+                 E "[>4;1m" E "[u" E "[2S" "t");
+    check_filter("device attributes",
+                 "a" E "[c" E "[0c" E "[>c" E "[=c" E "[?1;2c" "b", true,
+                 "ab");
+    check_filter("status and cursor position",
+                 "a" E "[5n" E "[6n" E "[?6n" "b", true, "ab");
+    check_filter("window operations", "a" E "[21t" E "[8;50;100t" "b", true,
+                 "ab");
+    check_filter("parameters and media copy", "a" E "[x" E "[0i" E "[?5i"
+                 "b", true, "ab");
+    check_filter("mode and presentation requests",
+                 "a" E "[?25$p" E "[4$p" E "[1$w" E "[2$u" E "[&u" "b", true,
+                 "ab");
+    check_filter("version, keyboard and graphics queries",
+                 "a" E "[>q" E "[?4m" E "[?u" E "[?1;1S" "b", true, "ab");
+    check_filter("checksum and SGR reports",
+                 "a" E "[1;1;1;1;1;1*y" E "[1;1;2;2#|" "b", true, "ab");
+    check_filter("a control in a query", "a" E "[6\an" "b", true, "ab");
+    check_filter("a query cut by an escape", "a" E "[6" E "[1mb", true,
+                 "a" E "[6" E "[1mb");
 
     check_partial("none", "text", 0);
     check_partial("complete", "a" E "]8;;https://x" ST "b", 0);
@@ -151,7 +175,12 @@ int main(void)
     check_partial("before ST", "a" E "]8;;https://x" E, 15);
     check_partial("other OSC", "a" E "]0;title", 9);
     check_partial("DCS", "a" E "P+q", 4);
-    check_partial("CSI", "a" E "[1", 0);
+    check_partial("CSI", "a" E "[1", 3);
+    check_partial("ESC [", "a" E "[", 2);
+    check_partial("complete CSI", "a" E "[6nb", 0);
+    check_partial("long CSI",
+                  "a" E "[1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1"
+                  "1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1", 0);
     check_partial("a line after its start", "a" E "]8;;http\nb", 0);
 
     if (failures != 0) {

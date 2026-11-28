@@ -3192,7 +3192,8 @@ telnet_mud() {
 url=https://example.org/$(printf '%060d' 0)
 links="see \\033]8;;$url\\033\\\\example\\033]8;;\\033\\\\ endofline\\r\\n"
 links="${links}a \\033]8;;file:///etc/passwd\\007file\\033]8;;\\007 link"
-links="${links}\\r\\nclip\\033]52;c;aGk=\\007board\\r\\nlastline\\r\\n"
+links="${links}\\r\\nclip\\033]52;c;aGk=\\007bo\\033[6n\\005ard\\r\\n"
+links="${links}lastline\\r\\n"
 
 telnet_mud all "$links"
 run --until '#option links is now off' \
@@ -3240,7 +3241,8 @@ grep -Fq 'file:' "$tmp/out" && fail 'expected no link to a file'
 bel=$(printf '\007')
 grep -Fq "a <ESC>]8;;${bel}file<ESC>]8;;$bel link" "$tmp/out" \
     || fail 'expected the link to a file ended'
-# and no OSC 52, which would write to the clipboard
+# and no OSC 52, which would write to the clipboard, nor a query of the
+# cursor position, or ENQ, whose answers would come as typed keys
 has clipboard
 
 telnet_mud all "$links"

@@ -1,6 +1,6 @@
 /*
- *  osc.c  --  the control strings in the text from the MUD, such as
- *             hyperlinks (OSC 8), that reach the terminal
+ *  osc.c  --  the control strings and sequences in the text from the
+ *             MUD, such as hyperlinks (OSC 8), that reach the terminal
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -191,6 +191,72 @@ static size_t string_len(const char *buf, size_t len, enum string_end *end)
     return len;
 }
 
+/* what makes a control sequence (ESC [ ...) what it is */
+struct csi {
+    char private;               /* <, =, > or ? before the parameters */
+    char inter;                 /* the last intermediate byte, ! to / */
+    char final;                 /* or '\0' if it has none */
+};
+
+/*
+ * the length of the control sequence (ESC [ ...) at the start of the
+ * 'len' bytes of 'buf', and what it is in 'csi', with no final byte if
+ * an ESC, CAN, SUB or a byte that is not ASCII ends it; 0 if it has not
+ * ended there. The terminal runs the other C0 controls in it and goes on
+ * with the sequence, so they are part of it here.
+ */
+static size_t csi_len(const char *buf, size_t len, struct csi *csi)
+{
+    *csi = (struct csi){ 0 };
+    for (size_t i = 2; i < len; ++i) {
+        unsigned char c = buf[i];
+        if (c >= 0x40 && c <= 0x7e) {
+            csi->final = (char)c;
+            return i + 1;
+        }
+        if (c == '\033' || c == 0x18 || c == 0x1a || c > 0x7e)
+            return i;
+        if (i == 2 && c >= '<' && c <= '?')
+            csi->private = (char)c;
+        else if (c >= 0x20 && c <= 0x2f)
+            csi->inter = (char)c;
+    }
+    return 0;
+}
+
+/*
+ * does the control sequence 'csi' make the terminal answer, as if typed,
+ * or print? Those that ask for its attributes (c), its status and the
+ * position of the cursor (n), its parameters (x), the window operations
+ * (t), which also report the title, the requests of a mode ($ p) and of
+ * the presentation state ($ w, $ u), and of the version (> q), the
+ * queries of the keyboard modes (? m, ? u, & u), of the graphics (? S),
+ * of the checksum of an area (* y) and of the SGR of an area (# |), and
+ * the media copy (i), which prints
+ */
+static bool makes_terminal_answer(const struct csi *csi)
+{
+    switch (csi->final) {
+    case 'c': case 'n': case 'x': case 't': case 'i':
+        return true;
+    case 'p': case 'w':
+        return csi->inter == '$';
+    case 'q':
+        return csi->private == '>';
+    case 'm': case 'S':
+        return csi->private == '?';
+    case 'u':
+        return (csi->private == '?' || csi->inter == '$'
+                || csi->inter == '&');
+    case 'y':
+        return csi->inter == '*';
+    case '|':
+        return csi->inter == '#';
+    default:
+        return false;
+    }
+}
+
 size_t osc_partial(const char *buf, size_t len)
 {
     for (size_t i = 0; i < len; ) {
@@ -200,6 +266,14 @@ size_t osc_partial(const char *buf, size_t len)
         }
         if (i + 1 == len)
             return 1;           /* it may start one */
+        if (buf[i + 1] == '[') {
+            struct csi csi;
+            size_t n = csi_len(buf + i, len - i, &csi);
+            if (n == 0)
+                return len - i <= CSI_PARTIAL_MAX ? len - i : 0;
+            i += n;
+            continue;
+        }
         if (!is_string_start((unsigned char)buf[i + 1])) {
             ++i;
             continue;
@@ -286,6 +360,23 @@ size_t osc_filter(char *buf, size_t len, bool links, const char *schemes)
         if (c == 0xc2 && i + 1 < len && (unsigned char)buf[i + 1] >= 0x80
             && (unsigned char)buf[i + 1] <= 0x9f) {
             i += 2;
+            continue;
+        }
+        /* ENQ, to which the terminal answers with its answerback */
+        if (c == 0x05) {
+            ++i;
+            continue;
+        }
+        if (c == '\033' && i + 1 < len && buf[i + 1] == '[') {
+            struct csi csi;
+            size_t n = csi_len(buf + i, len - i, &csi);
+            if (n == 0)
+                n = len - i;    /* longer than osc_partial() keeps */
+            if (!makes_terminal_answer(&csi)) {
+                memmove(buf + out, buf + i, n);
+                out += n;
+            }
+            i += n;
             continue;
         }
         if (c != '\033' || i + 1 == len

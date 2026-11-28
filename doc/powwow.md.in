@@ -324,6 +324,14 @@ as typed keys, notifications, and the strings of `ESC P`, `ESC X`,
 `ESC ^` and `ESC _`, with which a program can download files or draw
 images in some terminals.
 
+Powwow also drops what would make the terminal answer, as if you typed
+the answer, or print: ENQ, and the control sequences (`ESC [ ...`) that
+ask for its attributes, its status, the position of the cursor, the
+title or the size of the window and other reports, the window
+operations, which may also resize or move the window, and the media
+copy, which prints. The other control sequences, such as those of
+colors and of moving the cursor, reach the terminal.
+
 ## Quitting powwow
 
 At any time, you can type `#quit` to exit from powwow. Be

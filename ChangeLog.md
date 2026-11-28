@@ -111,6 +111,10 @@ The user-visible changes in each release; those up to 1.3.2 are in
   hyperlinks, such as OSC 52, which writes to the clipboard, the
   queries of the terminal and the strings of `ESC P` and `ESC _`, are
   dropped, and so are the C1 control characters.
+* ENQ and the control sequences from the MUD that make the terminal
+  answer, as if typed, or print are dropped: such as the queries of its
+  attributes, of its status and of the position of the cursor, the
+  window operations, which also report the title, and the media copy.
 
 ### Platforms and building
 

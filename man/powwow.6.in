@@ -158,7 +158,9 @@ by default
 .PP
 Of the control strings from the MUD, only the titles of the window and
 those hyperlinks reach the terminal; the others, such as OSC 52, which
-writes to the clipboard, and the C1 control characters are dropped.
+writes to the clipboard, and the C1 control characters are dropped,
+and so are ENQ and the control sequences that make the terminal answer,
+as if typed, or print.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help

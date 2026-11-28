@@ -3102,6 +3102,15 @@ if [ -f "$tmp/cert.pem" ]; then
     fi
 fi
 
+# a control string takes no room on screen, so the line is not wrapped
+# before x, and #mark leaves it whole
+title=$(printf '%090d' 0 | tr 0 t)
+run 'a control string takes no room on screen, and has no mark in it' \
+    "#option +wrap
+#mark tttt=bold
+#emulate (\"see \\033]0;$title\\007x\")"
+has "see <ESC>]0;$title$(printf '\007')x"
+
 run 'random numbers' "$(for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
     echo '#print (rand 6)'
 done)"

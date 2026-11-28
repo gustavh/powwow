@@ -10,7 +10,6 @@
 
 #include "../config.h"
 
-#include <ctype.h>
 #include <stdbool.h>
 #include <wchar.h>
 #include <wctype.h>
@@ -20,6 +19,7 @@
 
 #include "charset.h"
 #include "defines.h"
+#include "esc.h"
 #include "width.h"
 
 /* the characters that join or widen a grapheme cluster */
@@ -191,29 +191,15 @@ bool utf8_input_cell_on_space(const char *s, size_t len)
 
 int utf8_width(const char *s, size_t len)
 {
-    enum { NORM, ESCAPE, BRACKET } state = NORM;
+    enum esc_state state = ESC_TEXT;
     const char *end = s + len;
     int w = 0;
 
     while (s < end) {
         struct cell_state c;
         size_t n = cell_read(&c, s, end - s, false);
-        uint32_t cp = c.first;
-        switch (state) {
-        case NORM:
-            if (cp == ASCII_ESC)
-                state = ESCAPE;
-            else
-                w += c.width;
-            break;
-        case ESCAPE:
-            state = cp == '[' ? BRACKET : NORM;
-            break;
-        case BRACKET:
-            if (cp <= ASCII_MAX && isalpha(cp))
-                state = NORM;
-            break;
-        }
+        if (!esc_scan(&state, c.first))
+            w += c.width;
         s += n;
     }
     return w;

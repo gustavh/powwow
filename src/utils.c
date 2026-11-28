@@ -137,14 +137,12 @@ char *my_strncpy(char *dst, const char *src, int len)
 
 /*
  * Determine the printed length of a string. This can be less than the string
- * length since it might contain escape sequences. Treated as such are
- * "<esc> [ <non-letters> <letter>", "<esc> <non-[>", "<control-char>".
- * This is not entirely universal but covers the most common cases (i.e. ansi)
+ * length since it might contain escape sequences, as esc_scan() tells them.
  */
 int printstrlen(char *s)
 {
     int l = 0;
-    enum { NORM, ESCAPE, BRACKET } state = NORM;
+    enum esc_state state = ESC_TEXT;
     const char *end = s + strlen(s);
     while (*s != '\0') {
         uint32_t cp;
@@ -152,28 +150,15 @@ int printstrlen(char *s)
         utf8_get(s, n, &cp);
         int w = utf8_cell_width(s, n);
         s += n;
-        switch (state) {
-        case NORM:
-            if (cp == ASCII_ESC) {
-                state = ESCAPE;
-            } else if (cp == '\b') {
-                if (l > 0)
-                    --l;
-            } else if (cp == '\r') {
-                l = (l / cols) * cols;
-            } else {
-                l += w;
-            }
-            break;
-
-        case ESCAPE:
-            state = (cp == '[') ? BRACKET : NORM;
-            break;
-
-        case BRACKET:
-            if (is_csi_final(cp))
-                state = NORM;
-            break;
+        if (esc_scan(&state, cp))
+            continue;
+        if (cp == '\b') {
+            if (l > 0)
+                --l;
+        } else if (cp == '\r') {
+            l = (l / cols) * cols;
+        } else {
+            l += w;
         }
     }
     return l;
@@ -1042,6 +1027,35 @@ static bool match_mark_or_subst(basenode *bp, const char *src)
     return true;
 }
 
+/* is the position 'p' of the line at 'line' inside an escape sequence? */
+static bool in_escape(const char *line, const char *p)
+{
+    enum esc_state state = ESC_TEXT;
+    for (const char *s = line; s < p; ++s)
+        esc_scan(&state, (unsigned char)*s);
+    return state != ESC_TEXT;
+}
+
+/*
+ * match the #mark or #substitute 'bp' at or after 'src' in the line at
+ * 'line', but not where it starts or ends inside an escape sequence,
+ * such as in the address of a hyperlink, which the attributes of a mark
+ * or the text of a substitution would break
+ */
+static bool match_outside_escapes(basenode *bp, const char *line,
+                                  const char *src)
+{
+    if (!match_mark_or_subst(bp, src))
+        return false;
+    while (bp->start != NULL
+           && (in_escape(line, bp->start) || in_escape(line, bp->end))) {
+        if (bp->mbeg || *bp->start == '\0'
+            || !match_mark_or_subst(bp, bp->start + 1))
+            return false;
+    }
+    return true;
+}
+
 /*
  * Graphic rendition (colors etc.) of the text from the MUD:
  * sgr_stream is in effect after the last text printed for good, and
@@ -1082,7 +1096,7 @@ static ptr *ptrmaddmarks(ptr *dst, const char *line, int len,
                 matched = true;
             } else {
                 matched = ((!mp->b.mbeg || start)
-                           && match_mark_or_subst(&mp->b, line));
+                           && match_outside_escapes(&mp->b, linestart, line));
                 if (!matched)
                     mp->b.start = lineend;
             }
@@ -1147,6 +1161,7 @@ static ptr *ptrmaddsubst(ptr *dst, const char *line, int len)
     for (substnode *sp = substitutions; sp != NULL; sp = sp->next)
         sp->b.start = NULL;
 
+    const char *const linestart = line;
     const char *lineend = line + len;
     bool start = true;
 
@@ -1156,7 +1171,8 @@ static ptr *ptrmaddsubst(ptr *dst, const char *line, int len)
             bool matched = sp->b.start != NULL && sp->b.start >= line;
             if (!matched) {
                 matched = ((!sp->b.mbeg || start)
-                           && match_mark_or_subst(&sp->b, line));
+                           && match_outside_escapes(&sp->b, linestart,
+                                                    line));
                 if (!matched)
                     sp->b.start = lineend;
             }
@@ -1270,7 +1286,8 @@ static void sgr_reset_to_eol(void)
  */
 static int wrap_print(char *s)
 {
-    char buf[BUFSIZE]; /* ASSERT(cols<BUFSIZE) */
+    /* a row of 's' is never longer than all of it */
+    char *buf = xmalloc(strlen(s) + 1);
     const char *end = s + strlen(s);
 
     /* l = left, m = current offset */
@@ -1282,7 +1299,7 @@ static int wrap_print(char *s)
     while (l >= cols_1 - col0 && *s != '\0') {
         char *p = buf;
         int m = 0;
-        enum { NORM, ESCAPE, BRACKET } state = NORM;
+        enum esc_state state = ESC_TEXT;
         /* ls = last space in *s, lp = last space in *p */
         char *ls = NULL;
         char *lp = NULL;
@@ -1294,47 +1311,35 @@ static int wrap_print(char *s)
             uint32_t cp;
             size_t n = utf8_cell_len(s, end - s);
             utf8_get(s, n, &cp);
-            int w = state == NORM ? utf8_cell_width(s, n) : 0;
+            enum esc_state next = state;
+            bool in_esc = esc_scan(&next, cp);
+            int w = in_esc ? 0 : utf8_cell_width(s, n);
             /* a wide character that does not fit goes on the next line */
             if (m > 0 && !tty_cell_fits(col0 + m, s, n, w))
                 break;
+            state = next;
             memcpy(p, s, n);
             p += n;
             s += n;
-            switch (state) {
-            case NORM:
-                if (cp == ' ') {
-                    ls = s;
-                    lp = p;
+            if (in_esc)
+                continue;
+            if (cp == ' ') {
+                ls = s;
+                lp = p;
+            } else if (cp == '\b') {
+                if (m > 0) {
+                    --m;
+                    ++l;
                 }
-
-                if (cp == ASCII_ESC) {
-                    state = ESCAPE;
-                } else if (cp == '\b') {
-                    if (m > 0) {
-                        --m;
-                        ++l;
-                    }
-                } else if (cp == '\r') {
-                    ls = NULL;
-                    lp = NULL;
-                    m = 0;
-                } else {
-                    m += w;
-                    l -= w;
-                }
-
-                break;
-
-            case ESCAPE:
-                state = (cp == '[') ? BRACKET : NORM;
-                break;
-
-            case BRACKET:
-                if (is_csi_final(cp))
-                    state = NORM;
-                break;
+                continue;
+            } else if (cp == '\r') {
+                ls = NULL;
+                lp = NULL;
+                m = 0;
+                continue;
             }
+            m += w;
+            l -= w;
         }
 
         /* Adjust offsets and stuff to last space */
@@ -1362,6 +1367,7 @@ static int wrap_print(char *s)
     }
     if (reset)
         sgr_reset_to_eol();
+    free(buf);
     return rows;
 }
 

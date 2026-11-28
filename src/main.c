@@ -1479,6 +1479,15 @@ static void effective_prompt(void)
                     continue;
                 }
             }
+            if (q < len && is_string_start((unsigned char)pstr[q])) {
+                /* a control string, such as a hyperlink, up to its end */
+                enum esc_state st = ESC_STRING;
+                for (++q; q < len && st != ESC_TEXT; ++q)
+                    esc_scan(&st, (unsigned char)pstr[q]);
+                buf_add(&pend, &npend, &pendsize, pstr + p, q - p);
+                p = q - 1;
+                continue;
+            }
             /* some other (possibly incomplete) escape sequence */
             if (q < len)
                 ++q;

@@ -5,21 +5,7 @@
 
 #include <stdnoreturn.h>
 
-/*
- * is 'c' the final byte of a control sequence (ESC [ ... final), as
- * opposed to a parameter or intermediate byte? (ECMA-48; independent
- * of the locale, unlike isalpha())
- */
-static inline bool is_csi_final(unsigned char c)
-{
-    return c >= 0x40 && c <= 0x7e;
-}
-
-/* is 'c' a parameter or intermediate byte of a control sequence? */
-static inline bool is_csi_param(unsigned char c)
-{
-    return c >= 0x20 && c <= 0x3f;
-}
+#include "esc.h"
 
 static inline bool is_odigit(char c)
 {

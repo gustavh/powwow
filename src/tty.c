@@ -897,7 +897,7 @@ bool tty_cell_fits(int col, const char *s, size_t n, int w)
 static bool text_layout(const char *s, int *rows, int *col)
 {
     bool filled = false;
-    enum { NORM, ESCAPE, BRACKET } state = NORM;
+    enum esc_state state = ESC_TEXT;
     const char *end = s + strlen(s);
     while (s < end) {
         uint32_t cp;
@@ -905,45 +905,32 @@ static bool text_layout(const char *s, int *rows, int *col)
         utf8_get(s, n, &cp);
         int w = utf8_cell_width(s, n);
         s += n;
-        switch (state) {
-        case NORM:
-            if (cp == ASCII_ESC) {
-                state = ESCAPE;
-            } else if (cp == '\b') {
-                filled = false;
-                if (*col > 0)
-                    --*col;
-            } else if (cp == '\r') {
-                filled = false;
-                *col = 0;
-            } else if (cp == '\n') {
-                filled = false;
+        if (esc_scan(&state, cp))
+            continue;
+        if (cp == '\b') {
+            filled = false;
+            if (*col > 0)
+                --*col;
+        } else if (cp == '\r') {
+            filled = false;
+            *col = 0;
+        } else if (cp == '\n') {
+            filled = false;
+            ++*rows;
+            *col = 0;
+        } else if (w > 0) {
+            filled = false;
+            if (*col + w > cols) {
                 ++*rows;
                 *col = 0;
-            } else if (w > 0) {
-                filled = false;
-                if (*col + w > cols) {
-                    ++*rows;
-                    *col = 0;
-                }
-                *col += w;
-                /* without the wrap glitch, the last column wraps */
-                if (!wrapglitch && *col == cols) {
-                    filled = true;
-                    ++*rows;
-                    *col = 0;
-                }
             }
-            break;
-
-        case ESCAPE:
-            state = (cp == '[') ? BRACKET : NORM;
-            break;
-
-        case BRACKET:
-            if (is_csi_final(cp))
-                state = NORM;
-            break;
+            *col += w;
+            /* without the wrap glitch, the last column wraps */
+            if (!wrapglitch && *col == cols) {
+                filled = true;
+                ++*rows;
+                *col = 0;
+            }
         }
     }
     return filled;

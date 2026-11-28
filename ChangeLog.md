@@ -135,6 +135,10 @@ The user-visible changes in each release; those up to 1.3.2 are in
   `#rawsend` and the edited texts of MPI send theirs as they are.
 * Fixed `#isprompt` without a length never drawing a prompt that has no
   newline after it.
+* Control strings, which start with ESC ], ESC P, ESC X, ESC ^ or
+  ESC _, such as the title of the window, take no room on screen up to
+  their end, for wrapping and for the prompt; and `#mark` and
+  `#substitute` no longer match in the middle of an escape sequence.
 * Fixed `#zap` of a connection with TLS waiting forever for a MUD that
   does not answer the end of the session; it waits for a second at
   most.

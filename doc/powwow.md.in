@@ -314,7 +314,10 @@ When the MUD asks for NEW-ENVIRON variables (RFC 1572), powwow tells it
 those of the MUD New-Environ Standard (MNES): `CLIENT_NAME` (`POWWOW`),
 `CLIENT_VERSION`, `CHARSET`, `MTTS` and `TERMINAL_TYPE`, as above; and
 the user variable `OSC_HYPERLINKS`, which is 1 if `#option links` is on,
-or else 0, and which powwow sends again when you change it.
+or else 0, and which powwow sends again when you change it. It sends
+those of the MNES also right away, with INFO, as soon as the MUD asks
+for NEW-ENVIRON, so that a MUD that shows its login screen before it
+gets the answers it asks for knows the client by then.
 
 ## Control strings from the MUD
 

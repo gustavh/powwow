@@ -3133,7 +3133,8 @@ fi
 # asks for the terminal type four times and for the NEW-ENVIRON variables,
 # all of them and then some, or with "name" only for CLIENT_NAME, sends
 # its argument, with escapes such as \r and \033, once powwow has
-# answered, and writes what powwow sends to $tmp/sent until it closes
+# answered, also with the INFO that it sends with its WILL NEW-ENVIRON,
+# and writes what powwow sends to $tmp/sent until it closes
 cat > "$tmp/telnet_mud.py" <<'EOF'
 import codecs, os, socket, sys
 port_file, sent_file, mode, text = sys.argv[1:5]
@@ -3148,14 +3149,14 @@ c, _ = s.accept()
 if mode == 'name':
     asks = bytes([IAC, DO, ENVIRON, IAC, SB, ENVIRON, 1, 0]) + b'CLIENT_NAME'
     asks += bytes([IAC, SE])
-    answers = 1
+    answers = 2
 else:
     asks = bytes([IAC, DO, TTYPE, IAC, DO, ENVIRON])
     asks += bytes([IAC, SB, TTYPE, 1, IAC, SE]) * 4
     asks += bytes([IAC, SB, ENVIRON, 1, IAC, SE])
     asks += (bytes([IAC, SB, ENVIRON, 1, 0]) + b'CLIENT_NAME' + bytes([3])
              + b'OSC_HYPERLINKS' + bytes([0]) + b'NOPE' + bytes([IAC, SE]))
-    answers = 6
+    answers = 7
 c.sendall(asks)
 got = b''
 c.settimeout(5)
@@ -3217,8 +3218,6 @@ subs = re.findall(IAC + SB + b'(.*?)' + IAC + SE, got, re.S)
 ttypes = [s[2:] for s in subs if s[:2] == b'\x18\x00']
 environs = [s[2:] for s in subs if s[:2] == b"'\x00"]
 infos = [s[2:] for s in subs if s[:2] == b"'\x02"]
-if infos != [b'\x03OSC_HYPERLINKS\x010']:
-    print('NEW-ENVIRON INFO %r' % infos)
 name = re.fullmatch(rb'POWWOW (\S+)', ttypes[0] if ttypes else b'')
 if (len(ttypes) != 4 or name is None or ttypes[1] != b'xterm'
         or not re.fullmatch(rb'MTTS (517|2565)', ttypes[2])
@@ -3232,6 +3231,13 @@ else:
             b'\x00CLIENT_NAME\x01POWWOW\x03OSC_HYPERLINKS\x011\x00NOPE']
     if environs != want:
         print('NEW-ENVIRON %r' % environs)
+    # the MNES variables with the WILL, before any SEND, and OSC_HYPERLINKS
+    # once #option links changes
+    mnes = want[0][:want[0].index(b'\x03OSC_HYPERLINKS')]
+    if infos != [mnes, b'\x03OSC_HYPERLINKS\x010']:
+        print('NEW-ENVIRON INFO %r' % infos)
+    if got.find(b"\xff\xfa'\x02") > got.find(b"\xff\xfa'\x00"):
+        print('expected the INFO before the IS')
 EOF
 [ -s "$tmp/check" ] && fail "$(cat "$tmp/check")"
 # the link whole, on one row, as its URL takes no room on screen, and with

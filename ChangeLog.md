@@ -99,7 +99,9 @@ The user-visible changes in each release; those up to 1.3.2 are in
 * NEW-ENVIRON: powwow tells the MUD the variables of the MUD
   New-Environ Standard, `CLIENT_NAME`, `CLIENT_VERSION`, `CHARSET`,
   `MTTS` and `TERMINAL_TYPE`, and the user variable `OSC_HYPERLINKS`, 1
-  if it shows the MUD's hyperlinks, as `#option links` says.
+  if it shows the MUD's hyperlinks, as `#option links` says; those of
+  the MNES also with INFO, right away, so that MUME knows the client
+  when it shows its login screen.
 * Hyperlinks (OSC 8) from the MUD reach the terminal with `#option
   links`, by default `links=auto`, on in terminals that seem to show
   them, or turned on or off for all terminals; and only those to the

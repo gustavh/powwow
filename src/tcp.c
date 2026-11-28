@@ -410,11 +410,12 @@ static void send_environ(connsess *conn, char cmd, const char *buf,
 }
 
 /*
- * answer a NEW-ENVIRON SEND of the 'len' bytes at 's', a list of the
- * variables asked for: VAR or USERVAR and a name each, where a type with
- * no name asks for all of that type, as no list at all asks for all
+ * send the NEW-ENVIRON variables of the 'len' bytes at 's', as a SEND
+ * lists them, as the subcommand 'cmd', IS to answer a SEND, or INFO: VAR
+ * or USERVAR and a name each, where a type with no name asks for all of
+ * that type, as no list at all asks for all
  */
-static void environ_send(connsess *conn, const byte *s, size_t len)
+static void environ_send(connsess *conn, char cmd, const byte *s, size_t len)
 {
     char buf[1024];
     size_t used = 0;
@@ -461,10 +462,24 @@ static void environ_send(connsess *conn, const byte *s, size_t len)
         }
         environ_add_var(conn, buf, sizeof buf, &used, user, name, nlen, var);
     }
-    send_environ(conn, SUBOPT_IS, buf, used);
+    send_environ(conn, cmd, buf, used);
 #ifdef TELOPTS
-    tty_printf("[sent SB NEW-ENVIRON IS, %zu bytes]\n", used);
+    tty_printf("[sent SB NEW-ENVIRON %s, %zu bytes]\n",
+               cmd == SUBOPT_IS ? "IS" : "INFO", used);
 #endif
+}
+
+/*
+ * tell 'conn' the MNES variables, the VARs, with INFO right after the
+ * WILL NEW-ENVIRON, without waiting for SEND, which IS answers: so that
+ * a MUD that renders its login screen once the first replies are in, as
+ * MUME does, knows the client by then; it gets them again with IS when
+ * it sends SEND
+ */
+static void environ_announce(connsess *conn)
+{
+    static const byte all_vars[] = { ENVIRON_VAR };
+    environ_send(conn, SUBOPT_INFO, all_vars, sizeof all_vars);
 }
 
 /* #option links changed: tell the MUDs that asked for OSC_HYPERLINKS */
@@ -505,7 +520,7 @@ static void dosubopt(connsess *conn, byte *str, size_t len)
 #ifdef TELOPTS
             tty_printf("[got SB NEW-ENVIRON SEND]\n");
 #endif
-            environ_send(conn, str + 2, len - 2);
+            environ_send(conn, SUBOPT_IS, str + 2, len - 2);
         }
     } else if (str[0] == TELOPT_CHARSET) {
         if (str[1] == CHARSET_REQUEST)
@@ -1097,9 +1112,11 @@ static int read_telnet(connsess *conn, void *buffer, size_t maxsize)
                 sendopt(conn, WILL, *s);
                 break;
             case TELOPT_NEW_ENVIRON:
-                if (!conn->new_environ)
+                if (!conn->new_environ) {
                     sendopt(conn, WILL, *s);
-                conn->new_environ = true;
+                    conn->new_environ = true;
+                    environ_announce(conn);
+                }
                 break;
             case TELOPT_NAWS:
                 sendopt(conn, WILL, *s);

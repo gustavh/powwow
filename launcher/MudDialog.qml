@@ -337,9 +337,11 @@ PowwowDialog {
         // the rest
         ScrollView {
             anchors.fill: parent
-            implicitWidth: hiliteGrid.implicitWidth
+            // wider by the vertical scroll bar, where it takes room, so
+            // that it does not make the content scroll sideways
+            implicitWidth: hiliteGrid.implicitWidth + effectiveScrollBarWidth
             implicitHeight: hiliteGrid.implicitHeight
-            contentWidth: hiliteGrid.implicitWidth
+            contentWidth: availableWidth
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             clip: true
 
@@ -437,97 +439,116 @@ PowwowDialog {
                 dialog.optionBoxes[name].checked = dialog.chosen[name] === true
         }
 
-        ColumnLayout {
-            spacing: 4
+        // scrolled where the window is too low for it, as for the
+        // highlighting above
+        ScrollView {
+            anchors.fill: parent
+            // wider by the vertical scroll bar, where it takes room, so
+            // that it does not make the content scroll sideways
+            implicitWidth: (advancedColumn.implicitWidth
+                            + effectiveScrollBarWidth)
+            implicitHeight: advancedColumn.implicitHeight
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            clip: true
 
-            Repeater {
-                model: dialog.optionGroups
+            ColumnLayout {
+                id: advancedColumn
 
-                ColumnLayout {
-                    id: group
+                spacing: 4
 
-                    required property var modelData
-                    required property int index
+                Repeater {
+                    model: dialog.optionGroups
 
-                    Layout.topMargin: index > 0 ? 8 : 0
-                    spacing: 4
+                    ColumnLayout {
+                        id: group
 
-                    Label {
-                        text: group.modelData.title
-                        font.bold: true
-                    }
-                    Repeater {
-                        model: group.modelData.options
+                        required property var modelData
+                        required property int index
 
-                        CheckBox {
-                            id: box
-
-                            required property var modelData
-
-                            text: modelData.text
-                            onToggled: dialog.chosen[modelData.name] = checked
-                            Component.onCompleted:
-                                dialog.optionBoxes[modelData.name] = box
-
-                            FocusRing {}
-                        }
-                    }
-                    // #setvar keepalive: that of Settings, or the MUD's own
-                    CheckBox {
-                        id: keepaliveBox
-
-                        visible: group.modelData.keepalive === true
-                        text: qsTr("Use the keepalive from Settings")
-                        onToggled: {
-                            if (checked)
-                                keepaliveField.text = (dialog.userKeepalive
-                                                       === "0"
-                                                       ? ""
-                                                       : dialog.userKeepalive)
-                        }
-                        Component.onCompleted: {
-                            if (group.modelData.keepalive === true) {
-                                dialog.keepaliveBox = keepaliveBox
-                                dialog.showKeepalive()
-                            }
-                        }
-
-                        FocusRing {}
-                    }
-                    RowLayout {
-                        visible: group.modelData.keepalive === true
-                        Layout.leftMargin: 28
-                        spacing: 8
+                        Layout.topMargin: index > 0 ? 8 : 0
+                        spacing: 4
 
                         Label {
-                            enabled: !keepaliveBox.checked
-                            text: qsTr("Send a keepalive after")
+                            text: group.modelData.title
+                            font.bold: true
                         }
-                        EntryField {
-                            id: keepaliveField
+                        Repeater {
+                            model: group.modelData.options
 
-                            Layout.preferredWidth: 100
-                            enabled: !keepaliveBox.checked
-                            placeholderText: qsTr("never")
-                            validator: IntValidator {
-                                bottom: 0
-                                top: 86400
+                            CheckBox {
+                                id: box
+
+                                required property var modelData
+
+                                text: modelData.text
+                                onToggled: dialog.chosen[modelData.name]
+                                           = checked
+                                Component.onCompleted:
+                                    dialog.optionBoxes[modelData.name] = box
+
+                                FocusRing {}
                             }
-                            // 0 is never, which the empty field shows
-                            onEditingFinished: {
-                                if (acceptableInput && parseInt(text, 10) === 0)
-                                    text = ""
+                        }
+                        // #setvar keepalive: that of Settings, or the
+                        // MUD's own
+                        CheckBox {
+                            id: keepaliveBox
+
+                            visible: group.modelData.keepalive === true
+                            text: qsTr("Use the keepalive from Settings")
+                            onToggled: {
+                                if (checked)
+                                    keepaliveField.text
+                                        = (dialog.userKeepalive === "0"
+                                           ? ""
+                                           : dialog.userKeepalive)
                             }
                             Component.onCompleted: {
                                 if (group.modelData.keepalive === true) {
-                                    dialog.keepaliveField = keepaliveField
+                                    dialog.keepaliveBox = keepaliveBox
                                     dialog.showKeepalive()
                                 }
                             }
+
+                            FocusRing {}
                         }
-                        Label {
-                            enabled: !keepaliveBox.checked
-                            text: qsTr("idle seconds")
+                        RowLayout {
+                            visible: group.modelData.keepalive === true
+                            Layout.leftMargin: 28
+                            spacing: 8
+
+                            Label {
+                                enabled: !keepaliveBox.checked
+                                text: qsTr("Send a keepalive after")
+                            }
+                            EntryField {
+                                id: keepaliveField
+
+                                Layout.preferredWidth: 100
+                                enabled: !keepaliveBox.checked
+                                placeholderText: qsTr("never")
+                                validator: IntValidator {
+                                    bottom: 0
+                                    top: 86400
+                                }
+                                // 0 is never, which the empty field shows
+                                onEditingFinished: {
+                                    if (acceptableInput
+                                        && parseInt(text, 10) === 0)
+                                        text = ""
+                                }
+                                Component.onCompleted: {
+                                    if (group.modelData.keepalive === true) {
+                                        dialog.keepaliveField = keepaliveField
+                                        dialog.showKeepalive()
+                                    }
+                                }
+                            }
+                            Label {
+                                enabled: !keepaliveBox.checked
+                                text: qsTr("idle seconds")
+                            }
                         }
                     }
                 }

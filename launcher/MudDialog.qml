@@ -25,8 +25,8 @@ PowwowDialog {
             { name: "speedwalk",
               text: qsTr("Walk with speedwalk, such as \u201c3en\u201d") },
             { name: "reprint",
-              text: qsTr("When typing ahead, show each command again at the"
-                         + " prompt it runs at") },
+              text: qsTr("Show typed-ahead commands again at their"
+                         + " prompts") },
         ] },
         { title: qsTr("What powwow shows"), options: [
             { name: "echo",

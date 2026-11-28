@@ -23,7 +23,9 @@ PowwowDialog {
             { name: "autoclear",
               text: qsTr("Clear the input line before running commands") },
             { name: "speedwalk",
-              text: qsTr("Walk with speedwalk, such as \u201c3en\u201d") },
+              text: qsTr("Walk with speedwalk, such as %1")
+                  .arg("<span style=\"font-family: '"
+                       + Launcher.fixedFont.family + "'\">ne2sw</span>") },
             { name: "reprint",
               text: qsTr("Show typed-ahead commands again at their"
                          + " prompts") },
@@ -481,7 +483,11 @@ PowwowDialog {
 
                                 required property var modelData
 
+                                // with markup, such as the monospace
+                                // example of speedwalk, but read as text
                                 text: modelData.text
+                                Accessible.name: modelData.text.replace(
+                                                     /<[^>]*>/g, "")
                                 onToggled: dialog.chosen[modelData.name]
                                            = checked
                                 Component.onCompleted:

@@ -146,6 +146,10 @@ Asked for the terminal type, or for NEW-ENVIRON variables,
 tells the MUD its name and version, the terminal type and what they can
 do, as the MUD Terminal Type Standard (MTTS) and the MUD New-Environ
 Standard (MNES) say.
+.PP
+Of the control strings from the MUD, only the titles of the window
+reach the terminal; the others, such as OSC 52, which writes to the
+clipboard, and the C1 control characters are dropped.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help

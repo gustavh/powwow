@@ -72,6 +72,7 @@
 #include "sgr.h"
 #include "width.h"
 #include "charname.h"
+#include "osc.h"
 
 /* the start of the lines that continue the version and the authors */
 #define VER_CONT "    "
@@ -1928,9 +1929,15 @@ static void get_remote_input(fd_set *read_fds, unsigned *ncache_read_fds)
     connsess *conn = current_connection;
 
     if (conn->fragment != NULL) {
-        /* leave tcp_read() room to decode; see TCP_READ_MIN */
+        /* leave tcp_read() room to decode; see TCP_READ_MIN; the start of
+         * a control string, which waits for its end, may be longer */
         len = strlen(conn->fragment);
-        if (len > BUFSIZE - TCP_READ_MIN) {
+        static_assert(OSC_PARTIAL_MAX
+                      <= TCP_READ_EXPANSION * BUFSIZE - TCP_READ_MIN,
+                      "no room to read after the start of a string");
+        size_t max = (osc_partial(conn->fragment, len) == (size_t)len
+                      ? OSC_PARTIAL_MAX : BUFSIZE - TCP_READ_MIN);
+        if ((size_t)len > max) {
             len = 0;
             common_clear(promptlen != 0 && !opt_compact);
             message_wrap(WRAP_CONT, "#error: ##%s : line too long, discarded",
@@ -2047,6 +2054,18 @@ static void get_remote_input(fd_set *read_fds, unsigned *ncache_read_fds)
         current_connection = conn;
         return;
     }
+
+    /* control strings are filtered only whole: the start of one waits
+     * for its end */
+    size_t n = got;
+    size_t partial = osc_partial(buf, n);
+    if (partial != 0)
+        conn->fragment = xstrdup(buf + n - partial);
+    n = osc_filter(buf, n - partial);
+    buf[n] = '\0';
+    if (n == 0)
+        return;
+    got = (int)n;
 
     if (linemode & LM_CHAR) {
         /* char-by-char mode: just display output, no fuss */

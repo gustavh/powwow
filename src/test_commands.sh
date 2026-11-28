@@ -3157,7 +3157,7 @@ telnet_mud() {
     done
 }
 
-telnet_mud 'lastline\r\n'
+telnet_mud 'clip\033]52;c;aGk=\007board\r\nlastline\r\n'
 run --until lastline \
     'powwow tells a MUD its name, version, terminal and abilities' \
     "#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
@@ -3190,6 +3190,18 @@ else:
         print('NEW-ENVIRON %r' % environs)
 EOF
 [ -s "$tmp/check" ] && fail "$(cat "$tmp/check")"
+
+# no OSC 52, which would write to the clipboard
+has clipboard
+
+# a control string with no end on its line is dropped up to the end of
+# the line
+telnet_mud 'a \033]0;title broken\r\nlastline\r\n'
+run --until lastline 'a control string with no end on its line is dropped' \
+    "#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
+wait $server 2>/dev/null
+has 'a '
+has lastline
 
 # a control string takes no room on screen, so the line is not wrapped
 # before x, and #mark leaves it whole

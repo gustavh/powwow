@@ -99,6 +99,10 @@ The user-visible changes in each release; those up to 1.3.2 are in
 * NEW-ENVIRON: powwow tells the MUD the variables of the MUD
   New-Environ Standard, `CLIENT_NAME`, `CLIENT_VERSION`, `CHARSET`,
   `MTTS` and `TERMINAL_TYPE`.
+* Control strings from the MUD other than the titles of the window,
+  such as OSC 52, which writes to the clipboard, the queries of the
+  terminal and the strings of `ESC P` and `ESC _`, are dropped, and so
+  are the C1 control characters.
 
 ### Platforms and building
 

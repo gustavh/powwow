@@ -8,6 +8,7 @@
 /test_sgr
 /test_attr
 /test_secret
+/test_osc
 *.log
 *.trs
 # the programs of a build on Cygwin

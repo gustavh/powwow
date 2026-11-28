@@ -310,6 +310,16 @@ When the MUD asks for NEW-ENVIRON variables (RFC 1572), powwow tells it
 those of the MUD New-Environ Standard (MNES): `CLIENT_NAME` (`POWWOW`),
 `CLIENT_VERSION`, `CHARSET`, `MTTS` and `TERMINAL_TYPE`, as above.
 
+## Control strings from the MUD
+
+Of the control strings that the MUD may send, powwow passes on only the
+titles of the window (OSC 0, 1 and 2). It drops the others, and the C1
+control characters, U+0080 to U+009F: such as OSC 52, which writes to
+the clipboard, the queries of the terminal, whose answers would come
+back as typed keys, notifications, and the strings of `ESC P`, `ESC X`,
+`ESC ^` and `ESC _`, with which a program can download files or draw
+images in some terminals.
+
 ## Quitting powwow
 
 At any time, you can type `#quit` to exit from powwow. Be

@@ -210,6 +210,9 @@ as you change it:
   and the others, or empty for powwow to choose them;
 - the highlighting of typed text and of the messages of powwow,
   `#hilite input` and `#hilite messages`, for the MUDs without their own;
+- whether powwow shows the links that the MUD sends, `#option links`:
+  Automatic, as the terminal seems to open them, On or Off; and their
+  URL schemes, `#option link-schemes`, or empty for `https http mailto`;
 - whether powwow saves the definition file on exit, `#option save`;
 - the keepalive, `#setvar keepalive`, for the MUDs without their own:
   after how many seconds without sending anything a MUD gets a telnet

@@ -8,14 +8,18 @@ import Powwow
 Page {
     id: page
 
-    // the command options of powwow, by the fields that edit them, and for
-    // a pager the checkbox that disables it, as "-"
+    // the command options of powwow, and the other options with text, by
+    // the fields that edit them, and for a pager the checkbox that disables
+    // it, as "-"
     readonly property var commands: [
         { field: editor, name: "editor" },
         { field: pager, name: "pager", off: pagerOff },
         { field: helpPager, name: "help-pager", off: helpPagerOff },
         { field: shell, name: "shell" },
+        { field: linkSchemes, name: "link-schemes" },
     ]
+    // #option links, as --set takes it, by the items of its combo box
+    readonly property var linksValues: ["auto", "on", "off"]
     property bool loaded: false
     // the values saved, by the names of the command options, so that a
     // field is saved only when it changed
@@ -45,6 +49,8 @@ Page {
         for (const h of hilites)
             h.editor.value = Launcher.get(h.name) ?? ""
         save.checked = Launcher.get("save") !== "off"
+        links.currentIndex = Math.max(0, linksValues.indexOf(
+                                          Launcher.get("links") ?? "auto"))
         savedKeepalive = Launcher.get("keepalive") || "0"
         keepalive.text = savedKeepalive === "0" ? "" : savedKeepalive
         terminal.currentIndex = Launcher.terminal
@@ -134,7 +140,8 @@ Page {
             if (!Launcher.set(c.name, ""))
                 return
         }
-        if (!Launcher.set("save", "on") || !Launcher.set("keepalive", "0"))
+        if (!Launcher.set("save", "on") || !Launcher.set("keepalive", "0")
+            || !Launcher.set("links", "auto"))
             return
         for (const h of hilites) {
             if (!Launcher.set(h.name, "default"))
@@ -412,6 +419,58 @@ Page {
             }
 
             Label {
+                text: qsTr("Links")
+                font.pixelSize: 18
+            }
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("Links that the MUD sends, shown for the terminal"
+                           + " to open. Automatic shows them in the"
+                           + " terminals that seem to open them. Only the"
+                           + " links to these URL schemes are shown, and"
+                           + " never those to telnet.")
+                wrapMode: Text.Wrap
+                opacity: 0.65
+            }
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 12
+                rowSpacing: 8
+
+                Label {
+                    text: qsTr("Show links")
+                }
+                ComboBox {
+                    id: links
+
+                    // in the window, as for the terminal below
+                    popup.popupType: Popup.Item
+
+                    model: [qsTr("Automatic"), qsTr("On"), qsTr("Off")]
+                    implicitContentWidthPolicy: ComboBox.WidestText
+                    onActivated: {
+                        if (page.loaded)
+                            Launcher.set("links",
+                                         page.linksValues[currentIndex])
+                    }
+
+                    FocusRing {}
+                }
+
+                Label {
+                    text: qsTr("URL schemes")
+                }
+                EntryField {
+                    id: linkSchemes
+
+                    Layout.fillWidth: true
+                    onEditingFinished: page.saveCommand("link-schemes", text)
+                    placeholderText: "https http mailto"
+                }
+            }
+
+            Label {
                 visible: Launcher.terminals.length > 1
                 text: qsTr("Terminal")
                 font.pixelSize: 18
@@ -599,6 +658,8 @@ Page {
                     qsTr("highlight typed text in bold and messages in"
                          + " italic bright blue again, except where a MUD"
                          + " has its own"),
+                    qsTr("show links in the terminals that seem to open"
+                         + " them, to https, http and mailto"),
                     qsTr("set the terminal back to \u201c%1\u201d")
                         .arg(Launcher.terminals[0] ?? ""),
                 ]

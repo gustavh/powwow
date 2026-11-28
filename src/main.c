@@ -149,6 +149,8 @@ bool opt_autoprint = false;     /* true: automatically #print lines matched by
 bool opt_reprint = false;       /* true: reprint sent commands when we get a
                                  * prompt */
 bool opt_sendsize = false;      /* true: send term size upon connect */
+bool opt_links = false;         /* true: show the MUD's hyperlinks; by
+                                 * default, if the terminal seems to */
 bool opt_autoclear = true;      /* true: clear input line before executing
                                  * commands from spawned programs.
                                  * if false, spawned progs must #clear before
@@ -600,6 +602,7 @@ static void warn_deffile_busy(void)
 
 int main(int argc, char **argv)
 {
+    opt_links = tty_guess_hyperlinks();
     remember_option_defaults();
 #ifdef __CYGWIN__
     add_cygwin_path();
@@ -2055,13 +2058,15 @@ static void get_remote_input(fd_set *read_fds, unsigned *ncache_read_fds)
         return;
     }
 
-    /* control strings are filtered only whole: the start of one waits
-     * for its end */
+    /* control strings, such as hyperlinks, are filtered only whole: the
+     * start of one waits for its end */
     size_t n = got;
     size_t partial = osc_partial(buf, n);
     if (partial != 0)
         conn->fragment = xstrdup(buf + n - partial);
-    n = osc_filter(buf, n - partial);
+    n = osc_filter(buf, n - partial, opt_links,
+                   (opt_link_schemes != NULL ? opt_link_schemes
+                    : LINK_SCHEMES_DEFAULT));
     buf[n] = '\0';
     if (n == 0)
         return;

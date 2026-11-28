@@ -1,6 +1,6 @@
 /*
- *  osc.c  --  the control strings in the text from the MUD that reach
- *             the terminal
+ *  osc.c  --  the control strings in the text from the MUD, such as
+ *             hyperlinks (OSC 8), that reach the terminal
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -12,13 +12,139 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
+#include <strings.h>
 
 #include "esc.h"
 #include "osc.h"
 
+static bool is_ascii_alpha(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
 static bool is_ascii_digit(char c)
 {
     return c >= '0' && c <= '9';
+}
+
+/* the value of the hexadecimal digit 'c', or -1 */
+static int hex_value(char c)
+{
+    if (is_ascii_digit(c))
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+/* are the 'len' bytes at 's' printable ASCII, without spaces? */
+static bool is_graphic(const char *s, size_t len)
+{
+    for (size_t i = 0; i < len; ++i) {
+        if (s[i] <= ' ' || s[i] > '~')
+            return false;
+    }
+    return true;
+}
+
+/* is the scheme of 'len' bytes at 'scheme' one of the words of 'list',
+ * separated by spaces or commas, in any case? */
+static bool scheme_listed(const char *scheme, size_t len, const char *list)
+{
+    static const char seps[] = " ,";
+    for (list += strspn(list, seps); *list != '\0';
+         list += strspn(list, seps)) {
+        size_t n = strcspn(list, seps);
+        if (n == len && strncasecmp(list, scheme, len) == 0)
+            return true;
+        list += n;
+    }
+    return false;
+}
+
+/* do the 'len' bytes at 's', with their %xx escapes decoded, have none
+ * of the characters of 'chars'? */
+static bool decoded_lacks(const char *s, size_t len, const char *chars)
+{
+    for (size_t i = 0; i < len; ++i) {
+        char c = s[i];
+        if (c == '%' && len - i >= 3 && hex_value(s[i + 1]) >= 0
+            && hex_value(s[i + 2]) >= 0) {
+            c = (char)(hex_value(s[i + 1]) * 16 + hex_value(s[i + 2]));
+            i += 2;
+        }
+        if (c != '\0' && strchr(chars, c) != NULL)
+            return false;
+    }
+    return true;
+}
+
+/*
+ * is the mailto URL of 'len' bytes at 's', after "mailto:", one to show,
+ * as the OSC 8 standard of Mudlet says: an address with no ?, & or #,
+ * also once decoded, and after it, if anything, only the subject and the
+ * body, and no fragment
+ */
+static bool mailto_allowed(const char *s, size_t len)
+{
+    if (memchr(s, '#', len) != NULL)
+        return false;
+    const char *query = memchr(s, '?', len);
+    size_t addrlen = query != NULL ? (size_t)(query - s) : len;
+    if (addrlen == 0 || !decoded_lacks(s, addrlen, "?&#"))
+        return false;
+    if (query == NULL)
+        return true;
+    const char *end = s + len;
+    for (const char *p = query + 1; p <= end; ) {
+        const char *amp = memchr(p, '&', end - p);
+        if (amp == NULL)
+            amp = end;
+        const char *eq = memchr(p, '=', amp - p);
+        size_t namelen = (eq != NULL ? eq : amp) - p;
+        if (!(namelen == 7 && strncasecmp(p, "subject", 7) == 0)
+            && !(namelen == 4 && strncasecmp(p, "body", 4) == 0))
+            return false;
+        p = amp + 1;
+    }
+    return true;
+}
+
+bool osc_link_allowed(const char *url, size_t len, const char *schemes)
+{
+    if (len == 0 || len > LINK_URL_MAX || !is_graphic(url, len))
+        return false;
+
+    /* the scheme: a letter, then letters, digits, +, - and . (RFC 3986) */
+    size_t i = 0;
+    if (!is_ascii_alpha(url[i]))
+        return false;
+    while (i < len && (is_ascii_alpha(url[i]) || is_ascii_digit(url[i])
+                       || url[i] == '+' || url[i] == '-' || url[i] == '.'))
+        ++i;
+    if (i == len || url[i] != ':' || !scheme_listed(url, i, schemes)
+        || scheme_listed(url, i, "telnet telnets"))
+        return false;
+
+    const char *rest = url + i + 1;
+    size_t restlen = len - i - 1;
+    if (i == 6 && strncasecmp(url, "mailto", 6) == 0)
+        return mailto_allowed(rest, restlen);
+
+    /* the host, after //, with no user name, which could pass off one
+     * host as another */
+    if (restlen >= 2 && rest[0] == '/' && rest[1] == '/') {
+        rest += 2;
+        restlen -= 2;
+        size_t hostlen = 0;
+        while (hostlen < restlen && strchr("/?#", rest[hostlen]) == NULL)
+            ++hostlen;
+        if (memchr(rest, '@', hostlen) != NULL)
+            return false;
+    }
+    return true;
 }
 
 /* how a control string ends */
@@ -88,11 +214,42 @@ size_t osc_partial(const char *buf, size_t len)
 }
 
 /*
+ * put the hyperlink 's', of 'n' bytes, with 'body' of 'bodylen' bytes
+ * between ESC ] 8 ; and its end, ESC \ if 'st', else BEL, at 'out', as
+ * osc_filter() says, and return how many bytes it takes there
+ */
+static size_t put_link(char *out, const char *s, size_t n, const char *body,
+                       size_t bodylen, bool st, const char *schemes)
+{
+    static const char end_bel[] = "\033]8;;\a";
+    static const char end_st[] = "\033]8;;\033\\";
+
+    const char *semi = memchr(body, ';', bodylen);
+    if (semi == NULL)
+        return 0;
+    size_t plen = semi - body;
+    const char *url = semi + 1;
+    size_t urllen = bodylen - plen - 1;
+    if (plen <= LINK_PARAMS_MAX && is_graphic(body, plen)
+        && (urllen == 0 || osc_link_allowed(url, urllen, schemes))) {
+        memmove(out, s, n);
+        return n;
+    }
+    /* the text goes on as plain text, not as part of the hyperlink
+     * before it */
+    const char *end = st ? end_st : end_bel;
+    size_t endlen = st ? sizeof end_st - 1 : sizeof end_bel - 1;
+    memcpy(out, end, endlen);
+    return endlen;
+}
+
+/*
  * put the control string 's', of 'n' bytes, which ends with ESC \ if
  * 'st', else with BEL, at 'out', as osc_filter() says, and return how
  * many bytes it takes there
  */
-static size_t put_string(char *out, const char *s, size_t n, bool st)
+static size_t put_string(char *out, const char *s, size_t n, bool st,
+                         bool links, const char *schemes)
 {
     if (s[1] != ']')
         return 0;
@@ -110,12 +267,16 @@ static size_t put_string(char *out, const char *s, size_t n, bool st)
     case '2':
         memmove(out, s, n);
         return n;
+    case '8':
+        if (!links || i == bodylen)
+            return 0;
+        return put_link(out, s, n, body + 2, bodylen - 2, st, schemes);
     default:
         return 0;
     }
 }
 
-size_t osc_filter(char *buf, size_t len)
+size_t osc_filter(char *buf, size_t len, bool links, const char *schemes)
 {
     size_t out = 0;
     for (size_t i = 0; i < len; ) {
@@ -135,7 +296,8 @@ size_t osc_filter(char *buf, size_t len)
         enum string_end end;
         size_t n = string_len(buf + i, len - i, &end);
         if (end == STRING_BEL || end == STRING_ST)
-            out += put_string(buf + out, buf + i, n, end == STRING_ST);
+            out += put_string(buf + out, buf + i, n, end == STRING_ST, links,
+                              schemes);
         i += n;
     }
     return out;

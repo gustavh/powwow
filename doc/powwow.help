@@ -435,6 +435,8 @@ commands, all those words will always be possible to Tab-complete on.
 @option
 #option [[+|-|=]<option>|list]...
 #option <command-option>=[<command>]
+#option links=auto
+#option link-schemes=[<scheme>...]
 
 This command lets you list or change various options of powwow.
 
@@ -466,11 +468,25 @@ the MUD in the environment variable ‘$TITLE’.
      #option pager=-              print the texts to view
      #option shell=               clear it: ‘$POWWOWSHELL’ or the default
 
-The options ‘editor’, ‘pager’, ‘help-pager’, ‘shell’ and ‘save’ are
-user-wide settings, the same for all MUDs: ‘#save’ writes them in the
-user-wide settings file if powwow was started with ‘--config’, as the
-launcher starts it, or else in the definition file, with the other
-options.
+With ‘links’ on, powwow shows the hyperlinks (OSC 8) that the MUD
+sends, and tells the MUD so; with it off, it shows their text as plain
+text.  By default, ‘links=auto’, it is on in terminals that seem to show
+hyperlinks; turned on or off, it holds in every terminal until
+‘#option links=auto’.  Only the links to the URL schemes of
+‘link-schemes’ are shown, by default ‘https http mailto’, with no user
+name before the host, and never ‘telnet’ links.  Of the other control
+strings from the MUD, only the titles of the window are passed on:
+others, such as OSC 52, which writes to the clipboard, are dropped.
+
+     #option -links               show the text of links as plain text
+     #option links=auto           show links if the terminal seems to
+     #option link-schemes=https   show only the links to https URLs
+
+The options ‘editor’, ‘pager’, ‘help-pager’, ‘shell’, ‘link-schemes’,
+‘links’ and ‘save’ are user-wide settings, the same for all MUDs: ‘#save’
+writes them in the user-wide settings file if powwow was started with
+‘--config’, as the launcher starts it, or else in the definition file,
+with the other options.
 @put
 #put {<text>|(<expr>)}
 

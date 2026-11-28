@@ -75,6 +75,7 @@ typedef struct connsess {
     bool naws;                  /* the MUD asked for the window size */
     int ttype_sent;             /* TERMINAL TYPE answers sent, up to 2 */
     bool new_environ;           /* the MUD asked for NEW-ENVIRON */
+    bool environ_links;         /* and for OSC_HYPERLINKS */
     bool telnet;                /* the MUD sent a telnet command */
     vtime last_sent;            /* when powwow last sent to it */
     enum telnet_state state;
@@ -131,6 +132,7 @@ void tcp_close(const char *id);
 void tcp_togglesnoop(const char *id);
 void tcp_spawn(const char *id, char *cmd);
 int tcp_unIAC(char *buffer, int len);
+void tcp_links_changed(void);
 
 #endif /* _TCP_H_ */
 

@@ -160,6 +160,7 @@ LONG = (b'This line is long enough to wrap at eighty columns, so the '
         b'text from the MUD that continues it after a packet ends must '
         b'not be cut.')
 COMPACT = ['#option +compact']
+LINKS = ['#option +links']
 
 
 def scenario(steps, **options):
@@ -242,6 +243,27 @@ SCENARIOS = {
     'colored prompt with GA, split':
         scenario([b'\x1b[1;3', ['a'], b'1mHP:\x1b[0m> ' + IAC, ['b'],
                   GA + b'\r\nYou see.\r\n']),
+    # hyperlinks (OSC 8)
+    'hyperlink split in its URL':
+        scenario([b'see \x1b]8;;https://exa', ['a'],
+                  b'mple.org\x1b\\here\x1b]8;;\x1b\\ end\r\n'],
+                 setup=LINKS),
+    'hyperlink split before its ST':
+        scenario([b'see \x1b]8;;https://example.org\x1b', ['a'],
+                  b'\\here\x1b]8;;\x1b\\ end\r\n'], setup=LINKS),
+    'refused hyperlink split after ESC':
+        scenario([b'see \x1b', ['a'],
+                  b']8;;file:///etc\x07here\x1b]8;;\x07 end\r\n'],
+                 setup=LINKS),
+    'hyperlinks in a prompt, split, then output':
+        scenario([b'\x1b]8;;https://x.org\x1b\\HP\x1b]8;;\x1b\\:> '
+                  b'\x1b]8;;http', ['a'],
+                  b's://y.org\x1b\\Y\x1b]8;;\x1b\\\r\nYou see.\r\n'],
+                 setup=LINKS),
+    'hyperlink with a long URL in a wrapped line, split':
+        scenario([b'go \x1b]8;;https://example.org/' + b'p' * 100, ['a'],
+                  b'\x1b\\' + LONG + b'\x1b]8;;\x1b\\\r\n'],
+                 setup=LINKS + ['#option +wrap']),
     # UTF-8
     'emoji in four packets':
         scenario([b'x ' + EMOJI[:1], ['a'], EMOJI[1:2], ['b'], EMOJI[2:3],

@@ -225,6 +225,7 @@ void tcp_set_charset(connsess *conn, enum charset cs, const char *why)
 enum {
     SUBOPT_IS = 0,
     SUBOPT_SEND = 1,
+    SUBOPT_INFO = 2,
 };
 
 /* the parts of a list of NEW-ENVIRON variables */
@@ -244,7 +245,8 @@ static const char *term_name(void)
 
 /*
  * what powwow and the terminal can do on 'conn', as the bits of the MUD
- * Terminal Type Standard (MTTS)
+ * Terminal Type Standard (MTTS): hyperlinks have none, as NEW-ENVIRON
+ * tells them
  */
 static unsigned mtts_bits(const connsess *conn)
 {
@@ -304,13 +306,14 @@ static void send_terminal_type(connsess *conn)
 }
 
 /* the NEW-ENVIRON variables of powwow: those of the MUD New-Environ
- * Standard (MNES) */
+ * Standard (MNES), and OSC_HYPERLINKS, a user variable */
 enum environ_var {
     EV_CLIENT_NAME,
     EV_CLIENT_VERSION,
     EV_CHARSET,
     EV_MTTS,
     EV_TERMINAL_TYPE,
+    EV_OSC_HYPERLINKS,
     EV_COUNT
 };
 
@@ -323,6 +326,7 @@ static const struct {
     [EV_CHARSET]        = { .name = "CHARSET" },
     [EV_MTTS]           = { .name = "MTTS" },
     [EV_TERMINAL_TYPE]  = { .name = "TERMINAL_TYPE" },
+    [EV_OSC_HYPERLINKS] = { .name = "OSC_HYPERLINKS", .user = true },
 };
 
 /* the value of the NEW-ENVIRON variable 'var' on 'conn', in 'buf' of
@@ -347,6 +351,8 @@ static const char *environ_value(const connsess *conn, enum environ_var var,
     case EV_TERMINAL_TYPE:
         snprintf(buf, size, "%.256s", term_name());
         return buf;
+    case EV_OSC_HYPERLINKS:
+        return opt_links ? "1" : "0";
     case EV_COUNT:
         break;
     }
@@ -371,11 +377,14 @@ static void environ_add(char *buf, size_t size, size_t *used,
 
 /* add the NEW-ENVIRON variable named 'name', of 'len' bytes, as a VAR or
  * as a USERVAR if 'user', with its value, if it is 'var', or else none,
- * as it is not defined, to the list in 'buf' */
-static void environ_add_var(const connsess *conn, char *buf, size_t size,
+ * as it is not defined, to the list in 'buf'; note that the MUD knows
+ * OSC_HYPERLINKS, which it then gets again when it changes */
+static void environ_add_var(connsess *conn, char *buf, size_t size,
                             size_t *used, bool user, const char *name,
                             size_t len, int var)
 {
+    if (var == EV_OSC_HYPERLINKS)
+        conn->environ_links = true;
     if (*used + 1 >= size)
         return;
     buf[(*used)++] = user ? ENVIRON_USERVAR : ENVIRON_VAR;
@@ -456,6 +465,23 @@ static void environ_send(connsess *conn, const byte *s, size_t len)
 #ifdef TELOPTS
     tty_printf("[sent SB NEW-ENVIRON IS, %zu bytes]\n", used);
 #endif
+}
+
+/* #option links changed: tell the MUDs that asked for OSC_HYPERLINKS */
+void tcp_links_changed(void)
+{
+    for (int i = 0; i < conn_max_index; ++i) {
+        connsess *conn = &CONN_INDEX(i);
+        if (conn->id == NULL || conn->spawn || !conn->new_environ
+            || !conn->environ_links)
+            continue;
+        char buf[64];
+        size_t used = 0;
+        const char *name = environ_vars[EV_OSC_HYPERLINKS].name;
+        environ_add_var(conn, buf, sizeof buf, &used, true, name,
+                        strlen(name), EV_OSC_HYPERLINKS);
+        send_environ(conn, SUBOPT_INFO, buf, used);
+    }
 }
 
 /*
@@ -1107,8 +1133,10 @@ static int read_telnet(connsess *conn, void *buffer, size_t maxsize)
                 conn->naws = false;
             if (*s == TELOPT_TTYPE)
                 conn->ttype_sent = 0;
-            if (*s == TELOPT_NEW_ENVIRON)
+            if (*s == TELOPT_NEW_ENVIRON) {
                 conn->new_environ = false;
+                conn->environ_links = false;
+            }
             if (*s == TELOPT_CHARSET) {
                 /* only acknowledge if it was enabled; a refusal of our
                  * unsolicited WILL needs no answer */
@@ -1746,6 +1774,7 @@ void tcp_close(const char *id)
     conn->naws = false;
     conn->ttype_sent = 0;
     conn->new_environ = false;
+    conn->environ_links = false;
     conn->telnet = false;
     conn->state = TELNET_NORMAL;
     conn->old_state = TELNET_NORMAL;
@@ -1863,6 +1892,7 @@ void tcp_spawn(const char *id, char *cmd)
     CONN_INDEX(i).naws = false;
     CONN_INDEX(i).ttype_sent = 0;
     CONN_INDEX(i).new_environ = false;
+    CONN_INDEX(i).environ_links = false;
     CONN_INDEX(i).telnet = false;
     CONN_INDEX(i).state = TELNET_NORMAL;
     CONN_INDEX(i).old_state = TELNET_NORMAL;

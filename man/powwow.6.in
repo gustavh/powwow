@@ -145,11 +145,20 @@ Asked for the terminal type, or for NEW-ENVIRON variables,
 .B powwow
 tells the MUD its name and version, the terminal type and what they can
 do, as the MUD Terminal Type Standard (MTTS) and the MUD New-Environ
-Standard (MNES) say.
+Standard (MNES) say, and whether it shows hyperlinks (OSC 8), in the
+user variable
+.BR OSC_HYPERLINKS .
+It shows them with
+.BR "#option links" ,
+by default in terminals that seem to show them, and only those to the
+URL schemes of
+.BR "#option link-schemes" ,
+by default
+.RB \(lq "https http mailto" \(rq.
 .PP
-Of the control strings from the MUD, only the titles of the window
-reach the terminal; the others, such as OSC 52, which writes to the
-clipboard, and the C1 control characters are dropped.
+Of the control strings from the MUD, only the titles of the window and
+those hyperlinks reach the terminal; the others, such as OSC 52, which
+writes to the clipboard, and the C1 control characters are dropped.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help
@@ -246,6 +255,13 @@ as
 .B on
 or
 .BR off ,
+and
+.B links
+also as
+.B auto
+while it is guessed from the terminal, which
+.B \-\-set
+makes it again,
 .BR host ,
 as
 .B #host

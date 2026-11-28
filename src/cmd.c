@@ -51,6 +51,7 @@
 #include "log.h"
 #include "charset.h"
 #include "secret.h"
+#include "osc.h"
 
 /*           local function declarations            */
 #define F(name) cmd_ ## name(char *arg)
@@ -3102,6 +3103,9 @@ static void cmd_quit(char *arg)
         exit_powwow();
 }
 
+/* #option links was set, not guessed from the terminal */
+static bool links_own;
+
 /* the on/off options; the user-wide ones, and all the command options, go
  * in the user-wide settings file when powwow saves it */
 static const struct {
@@ -3109,6 +3113,9 @@ static const struct {
     bool *option;
     const char *doc;
     bool global;
+    bool *own;          /* whether it was set, for one whose default is a
+                         * guess, which is then saved even if it is the
+                         * same, until <name>=auto makes it the guess */
 } options[] = {
     { .name = "autoclear", .option = &opt_autoclear,
       .doc = "clear input line before executing commands" },
@@ -3130,6 +3137,9 @@ static const struct {
       .doc = "print information about command effects" },
     { .name = "keyecho", .option = &opt_keyecho,
       .doc = "print command bound to key when executed" },
+    { .name = "links", .option = &opt_links,
+      .doc = "show hyperlinks from the mud, and tell it so", .global = true,
+      .own = &links_own },
     { .name = "reprint", .option = &opt_reprint,
       .doc = "reprint sent commands when getting new prompt" },
     { .name = "save", .option = &opt_save,
@@ -3147,6 +3157,19 @@ static const struct {
 
 /* the values of the options when powwow starts, their defaults */
 static bool option_defaults[sizeof options / sizeof *options];
+
+/* the option 'i', whose default is a guess, the guess again: auto */
+static void option_auto(int i)
+{
+    *options[i].option = option_defaults[i];
+    *options[i].own = false;
+}
+
+/* is the option 'i' one whose default is a guess, and not set? */
+static bool option_is_auto(int i)
+{
+    return options[i].own != NULL && !*options[i].own;
+}
 
 /* remember the defaults of the options, before anything changes them */
 void remember_option_defaults(void)
@@ -3167,9 +3190,10 @@ void reset_mud_options(void)
     }
 }
 
-char *opt_editor, *opt_help_pager, *opt_pager, *opt_shell;
+char *opt_editor, *opt_help_pager, *opt_link_schemes, *opt_pager, *opt_shell;
 
-/* the options that are commands, set as #option <name>=<command> */
+/* the options that are commands, or other text, set as
+ * #option <name>=<command> */
 static const struct {
     const char *name;
     char **value;
@@ -3179,6 +3203,8 @@ static const struct {
       .doc = "program for editing texts" },
     { .name = "help-pager", .value = &opt_help_pager,
       .doc = (const char *)u8"program for showing ‘#help’" },
+    { .name = "link-schemes", .value = &opt_link_schemes,
+      .doc = "URL schemes of the hyperlinks shown" },
     { .name = "pager", .value = &opt_pager,
       .doc = "program for showing texts" },
     { .name = "shell", .value = &opt_shell,
@@ -3231,12 +3257,19 @@ int print_options(FILE *file, enum option_scope scope)
     for (int i = 0; options[i].name != NULL; ++i) {
         if ((scope == OPTIONS_LOCAL && options[i].global)
             || (scope == OPTIONS_GLOBAL && !options[i].global)
-            || (file != NULL && *options[i].option == option_defaults[i]))
+            || (file != NULL && (option_is_auto(i)
+                                 || (options[i].own == NULL
+                                     && *options[i].option
+                                        == option_defaults[i]))))
             continue;
         if (len == 0)
             len = sprintf(line, "#option");
-        len += snprintf(line + len, sizeof line - len, " %c%s",
-                        *options[i].option ? '+' : '-', options[i].name);
+        if (option_is_auto(i))
+            len += snprintf(line + len, sizeof line - len, " %s=auto",
+                            options[i].name);
+        else
+            len += snprintf(line + len, sizeof line - len, " %c%s",
+                            *options[i].option ? '+' : '-', options[i].name);
         /* each line whole, so that messages have their attributes once */
         if (len >= width) {
             if (print_option_line(file, line) < 0)
@@ -3278,6 +3311,10 @@ static const char *command_option_used(int i, const char **from)
     *from = NULL;
     if (value != NULL)
         return value;
+    if (strcmp(name, "link-schemes") == 0) {
+        *from = "";
+        return LINK_SCHEMES_DEFAULT;
+    }
     if (strcmp(name, "shell") == 0) {
         value = shell_choice(from);
         if (value == NULL || *value == '\0') {
@@ -3416,8 +3453,11 @@ static void print_option_group(bool global)
         assert(options[i].option != NULL);
         if (options[i].global != global)
             continue;
-        snprintf(opt, sizeof opt, "#option %c%s",
-                 *options[i].option ? '+' : '-', options[i].name);
+        if (option_is_auto(i))
+            snprintf(opt, sizeof opt, "#option %s=auto", options[i].name);
+        else
+            snprintf(opt, sizeof opt, "#option %c%s",
+                     *options[i].option ? '+' : '-', options[i].name);
         print_option_doc(opt, options[i].doc);
     }
     /* the command options, which are all user-wide */
@@ -3454,7 +3494,8 @@ void keepalive_update(void)
 /*
  * the user-wide settings as when powwow starts, before the user-wide
  * settings file is read again: the command options not set, #option save
- * on, no user-wide #hilite, no secrets, and the default #editsuffix rules
+ * on, #option links guessed again, no user-wide #hilite, no secrets, and
+ * the default #editsuffix rules
  */
 void reset_user_wide_settings(void)
 {
@@ -3463,6 +3504,10 @@ void reset_user_wide_settings(void)
         *command_options[i].value = NULL;
     }
     opt_save = true;
+    for (int i = 0; options[i].name != NULL; ++i) {
+        if (options[i].own != NULL)
+            option_auto(i);
+    }
     input_hilite.user = input_hilite.def;
     message_hilite.user = message_hilite.def;
     hilite_update();
@@ -3511,10 +3556,13 @@ bool print_setting(const char *name)
         }
     }
     for (int i = 0; options[i].name != NULL; ++i) {
-        if (strcmp(name, options[i].name) == 0) {
+        if (strcmp(name, options[i].name) != 0)
+            continue;
+        if (option_is_auto(i))
+            printf("auto\n");
+        else
             printf("%s\n", *options[i].option ? "on" : "off");
-            return true;
-        }
+        return true;
     }
     bool own;
     const struct hilite *h = hilite_setting(name, strlen(name), &own);
@@ -3637,7 +3685,8 @@ enum setting_kind setting_kind(const char *name)
             return SETTING_COMMAND;
     for (int i = 0; options[i].name != NULL; ++i)
         if (strcmp(name, options[i].name) == 0)
-            return SETTING_ON_OFF;
+            return options[i].own != NULL ? SETTING_ON_OFF_AUTO
+                                          : SETTING_ON_OFF;
     for (size_t i = 0; i < sizeof file_settings / sizeof *file_settings; ++i)
         if (strcmp(name, file_settings[i]) == 0)
             return SETTING_FILE;
@@ -3705,9 +3754,16 @@ bool set_setting(const char *spec)
     for (int i = 0; !ok && options[i].name != NULL; ++i) {
         if ((int)strlen(options[i].name) == len
             && strncmp(spec, options[i].name, len) == 0) {
+            if (options[i].own != NULL && strcmp(value, "auto") == 0) {
+                option_auto(i);
+                ok = true;
+                break;
+            }
             if (strcmp(value, "on") != 0 && strcmp(value, "off") != 0)
                 break;
             *options[i].option = strcmp(value, "on") == 0;
+            if (options[i].own != NULL)
+                *options[i].own = true;
             if (options[i].option == &opt_info)
                 info = opt_info;
             ok = true;
@@ -3764,6 +3820,34 @@ bool set_setting(const char *spec)
     return ok;
 }
 
+/*
+ * #option <name>=auto, if 'word' is that for an option whose default is a
+ * guess: make it the guess again; return false if it is not
+ */
+static bool option_auto_word(const char *word)
+{
+    const char *eq = strchr(word, '=');
+    if (eq == NULL || strcmp(eq + 1, "auto") != 0)
+        return false;
+    size_t len = eq - word;
+    for (int i = 0; options[i].name != NULL; ++i) {
+        if (options[i].own == NULL || strlen(options[i].name) != len
+            || strncmp(options[i].name, word, len) != 0)
+            continue;
+        bool was = *options[i].option;
+        option_auto(i);
+        if (options[i].option == &opt_links && opt_links != was)
+            tcp_links_changed();
+        if (options[i].global)
+            config_changed();
+        if (opt_info)
+            message_printf("#option %s is now auto: o%s.\n", options[i].name,
+                           *options[i].option ? "n" : "ff");
+        return true;
+    }
+    return false;
+}
+
 static void cmd_option(char *arg)
 {
     arg = skipspace(arg);
@@ -3787,6 +3871,8 @@ static void cmd_option(char *arg)
         arg = skipspace(split_first_word(buf, BUFSIZE, arg));
         if (*buf == '\0')
             break;
+        if (option_auto_word(buf))
+            continue;
         enum { MODE_ON, MODE_OFF, MODE_TOGGLE, MODE_REP } mode;
         char *p = buf;
         char c = *p;
@@ -3829,6 +3915,8 @@ static void cmd_option(char *arg)
         case MODE_OFF:    *varp = false; break;
         case MODE_TOGGLE: *varp = !*varp; break;
         }
+        if (mode != MODE_REP && options[i].own != NULL)
+            *options[i].own = true;
         if (mode != MODE_REP && options[i].global)
             config_changed();
         /*
@@ -3836,6 +3924,8 @@ static void cmd_option(char *arg)
          */
         if (varp == &opt_reprint)
             reprint_clear();
+        if (varp == &opt_links && mode != MODE_REP)
+            tcp_links_changed();
 
         /* as above, but always print status if
          * "#option info" alone was typed */

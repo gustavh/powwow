@@ -58,6 +58,7 @@ size_t setting_names(const char **names, size_t size);
 enum setting_kind {
     SETTING_COMMAND,            /* a command, such as editor */
     SETTING_ON_OFF,             /* on or off, such as save */
+    SETTING_ON_OFF_AUTO,        /* on, off or auto, such as links */
     SETTING_HOST,               /* host, as #host takes it */
     SETTING_ATTR,               /* an attribute, such as hilite-input */
     SETTING_NUMBER,             /* a number, such as keepalive */

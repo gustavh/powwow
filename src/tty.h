@@ -12,6 +12,7 @@ extern const char *tty_modestandon, *tty_modestandoff;
 
 void tty_bootstrap(bool terminal);
 bool tty_locale_utf8(void);
+bool tty_guess_hyperlinks(void);
 void tty_use_locale(void);
 void tty_start(void);
 void tty_quit(void);

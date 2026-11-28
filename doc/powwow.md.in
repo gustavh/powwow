@@ -108,7 +108,8 @@ launcher, writes it, and the definition file has the others.
 `--get NAME` prints one setting and exits, and `--set NAME=VALUE` sets
 one, saves and exits, as the launcher reads and changes settings: a
 command option such as `editor`, an on/off option such as `save` as `on`
-or `off`, `host`, as `#host` takes it, or the user-wide attributes of
+or `off`, and `links` also as `auto` while it is guessed from the
+terminal, which `--set` makes it again, `host`, as `#host` takes it, or the user-wide attributes of
 `#hilite input` and `#hilite messages`, `hilite-input` and
 `hilite-messages`, as `#hilite` takes them, or empty for none, which
 `--set` sets back to those of powwow with `default`, and the MUD's own,
@@ -308,15 +309,18 @@ that.
 
 When the MUD asks for NEW-ENVIRON variables (RFC 1572), powwow tells it
 those of the MUD New-Environ Standard (MNES): `CLIENT_NAME` (`POWWOW`),
-`CLIENT_VERSION`, `CHARSET`, `MTTS` and `TERMINAL_TYPE`, as above.
+`CLIENT_VERSION`, `CHARSET`, `MTTS` and `TERMINAL_TYPE`, as above; and
+the user variable `OSC_HYPERLINKS`, which is 1 if `#option links` is on,
+or else 0, and which powwow sends again when you change it.
 
 ## Control strings from the MUD
 
 Of the control strings that the MUD may send, powwow passes on only the
-titles of the window (OSC 0, 1 and 2). It drops the others, and the C1
-control characters, U+0080 to U+009F: such as OSC 52, which writes to
-the clipboard, the queries of the terminal, whose answers would come
-back as typed keys, notifications, and the strings of `ESC P`, `ESC X`,
+titles of the window (OSC 0, 1 and 2), and the hyperlinks (OSC 8) that
+`#option links` lets through. It drops the others, and the C1 control
+characters, U+0080 to U+009F: such as OSC 52, which writes to the
+clipboard, the queries of the terminal, whose answers would come back
+as typed keys, notifications, and the strings of `ESC P`, `ESC X`,
 `ESC ^` and `ESC _`, with which a program can download files or draw
 images in some terminals.
 
@@ -1516,7 +1520,7 @@ one of those, and a new rule comes before them.
 
 Currently available option names are
 `autoclear`, `autoprint`, `compact`, `debug`, `echo`, `exit`, `history`,
-`identify`, `info`, `keyecho`, `reprint`, `save`, `sendsize`,
+`identify`, `info`, `keyecho`, `links`, `reprint`, `save`, `sendsize`,
 `speedwalk`, `words` and `wrap`.
 
 | Command | Effect |
@@ -1526,11 +1530,11 @@ Currently available option names are
 | `#option name` | toggles it |
 | `#option =name` | reports its status |
 
-The options `editor`, `pager`, `help-pager`, `shell` and `save` are
-user-wide settings, the same for all MUDs: `#save` writes them in the
-user-wide settings file if powwow was started with `--config`, as the
-launcher starts it, or else in the definition file, with the other
-options (see "The user-wide settings file").
+The options `editor`, `pager`, `help-pager`, `shell`, `link-schemes`,
+`links` and `save` are user-wide settings, the same for all MUDs:
+`#save` writes them in the user-wide settings file if powwow was started
+with `--config`, as the launcher starts it, or else in the definition
+file, with the other options (see "The user-wide settings file").
 
 #### `#option editor`, `pager`, `help-pager` and `shell`
 
@@ -1670,6 +1674,43 @@ MUD of the definition file, before it runs `#init`. A definition file
 whose `#init` starts with `#identify`, such as `#init ={#identify}` or
 `#init ={#identify;look}`, as older versions of powwow suggested, gets
 this option instead when it is read, and keeps the rest of its `#init`.
+
+#### `#option links` and `link-schemes`
+
+```
+#option [+|-]links
+#option links=auto
+#option link-schemes=[<scheme>...]
+```
+
+With `links` on, powwow passes the hyperlinks that the MUD sends (OSC 8,
+`ESC ] 8 ; ; <URL> ESC \`) to the terminal, which shows their text as a
+link to click; with `links` off, it drops them, and shows their text as
+plain text. By default, `links` is on in the terminals that seem to show
+hyperlinks, from their environment variables: iTerm2, WezTerm, Ghostty,
+kitty, foot, Alacritty, Windows Terminal, Visual Studio Code and those
+built on VTE, such as GNOME Terminal, which `#option` shows as
+`links=auto`. Once you turn `links` on or off, your choice is saved and
+holds in every terminal; `#option links=auto`, or "Automatic" in the
+launcher, makes it a guess again. Powwow also tells the MUD whether
+`links` is on (see "What powwow tells the MUD").
+
+Only the links to the URL schemes of `link-schemes`, separated by
+spaces or commas, by default `https http mailto`, are shown; and only if
+their URL is at most 4096 characters of printable ASCII, with no user
+name before the host, as in `https://bank.example@evil.example`, where
+the host is `evil.example`. A `mailto` link must have only a subject and
+a body after the address, which must have no `?`, `&` or `#`, also
+written as `%3F` and the like. Links to `telnet` and `telnets` are never
+shown, as the terminal would connect without asking. The text of any
+other link is shown as plain text. An empty `link-schemes` is the
+default again.
+
+```
+#option -links
+#option link-schemes=https
+#option link-schemes=https http mailto ftp
+```
 
 #### `#option sendsize`
 

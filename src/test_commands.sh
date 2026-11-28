@@ -16,8 +16,9 @@ export HOME TERM LC_ALL
 TMPDIR=$tmp
 export TMPDIR
 unset XDG_RUNTIME_DIR
-# the colors of xterm, which has 8, not those of the terminal of the tests
-unset COLORTERM WT_SESSION
+# the colors of xterm, which has 8, not those of the terminal of the tests,
+# and no hyperlinks, which powwow guesses from these
+unset COLORTERM KITTY_WINDOW_ID TERM_PROGRAM VTE_VERSION WT_SESSION
 # the user-wide settings file is then in $HOME, where the tests put it
 unset APPDATA XDG_CONFIG_HOME
 # that file, which tests that need another write over, without the
@@ -727,6 +728,27 @@ grep -Fq '#setvar: not an integer: default' "$tmp/out" \
     || fail 'expected default to be rejected for timer'
 "$POWWOW" "--config=$conf" --set keepalive=86401 > /dev/null 2>&1 \
     && fail 'expected --set keepalive=86401 to fail'
+
+# #option links, guessed from the terminal, is saved once set, even as the
+# guess, and holds in another terminal, until it is auto again
+name='--set links saves the choice, and auto the guess'
+[ "$("$POWWOW" "--config=$conf" --get links)" = auto ] \
+    || fail 'expected links=auto before it is set'
+"$POWWOW" "--config=$conf" --set links=off > /dev/null 2>&1 \
+    || fail '--set links=off failed'
+grep -Fqx '#option -links' "$conf" || fail 'expected #option -links saved'
+[ "$(TERM_PROGRAM=iTerm.app "$POWWOW" "--config=$conf" --get links)" = off ] \
+    || fail 'expected links off in a terminal that shows them'
+"$POWWOW" "--config=$conf" --set links=auto > /dev/null 2>&1 \
+    || fail '--set links=auto failed'
+grep -Fq 'links' "$conf" && fail 'expected no #option links once auto'
+[ "$(TERM_PROGRAM=iTerm.app "$POWWOW" "--config=$conf" --get links)" \
+      = auto ] || fail 'expected links=auto again'
+run '#option links=auto makes it a guess again' '#option +links
+#option links=auto
+#option'
+has '#option links is now auto: off.'
+grep -Fq ' links=auto' "$tmp/out" || fail 'expected links=auto in #option'
 "$POWWOW" "--config=$conf" --set keepalive=0 > /dev/null 2>&1 \
     || fail '--set keepalive=0 failed'
 grep -Fq '#setvar keepalive' "$conf" \
@@ -2640,8 +2662,8 @@ grep -aq 'input highlighting is now <ESC>\[33mon' "$tmp/out" \
 run 'Tab lists the words down and then across' '' \
     "#option 		$(printf '\025')
 "
-has 'autoclear    echo         history      list         sendsize     wrap'
-has 'debug        help-pager=  keyecho      save         words'
+has 'autoclear      editor=        info           pager=         speedwalk'
+has 'debug          history        links          sendsize'
 
 name='powwow-movieplay -a converts lines longer than 4 KB'
 long=$(printf '%05000d' 0)
@@ -2770,9 +2792,11 @@ for shell in bash zsh; do
     # in zsh, the whole word is replaced; in bash, the part after = or :
     if [ $shell = bash ]; then
         set=
+        links=
         tls=
     else
         set=save=
+        links=links=
         tls=--tls=
     fi
     expect_completion $shell 'powwow --ver' '--version '
@@ -2782,6 +2806,9 @@ for shell in bash zsh; do
     expect_completion $shell 'powwow --set sa' 'save='
     expect_completion $shell 'powwow --set conf'
     expect_completion $shell 'powwow --set save=o' "${set}on " "${set}off "
+    expect_completion $shell 'powwow --set links=' "${links}on " \
+        "${links}off " "${links}auto "
+    expect_completion $shell 'powwow --set links=a' "${links}auto "
     expect_completion $shell 'powwow --completion ' 'bash ' 'zsh '
     # the definition files end with .powwow, unless none matches
     if [ $shell = bash ]; then
@@ -3104,12 +3131,12 @@ fi
 
 # a MUD without TLS, which writes the number of its port to $tmp/port,
 # asks for the terminal type four times and for the NEW-ENVIRON variables,
-# all of them and then some, sends its argument, with escapes such as \r
-# and \033, once powwow has answered, and writes what powwow sends to
-# $tmp/sent until it closes
+# all of them and then some, or with "name" only for CLIENT_NAME, sends
+# its argument, with escapes such as \r and \033, once powwow has
+# answered, and writes what powwow sends to $tmp/sent until it closes
 cat > "$tmp/telnet_mud.py" <<'EOF'
 import codecs, os, socket, sys
-port_file, sent_file, text = sys.argv[1:4]
+port_file, sent_file, mode, text = sys.argv[1:5]
 IAC, SE, SB, DO, TTYPE, ENVIRON = 255, 240, 250, 253, 24, 39
 s = socket.socket()
 s.bind(('127.0.0.1', 0))
@@ -3118,12 +3145,17 @@ with open(port_file + '.new', 'w') as f:
     f.write(str(s.getsockname()[1]))
 os.rename(port_file + '.new', port_file)
 c, _ = s.accept()
-asks = bytes([IAC, DO, TTYPE, IAC, DO, ENVIRON])
-asks += bytes([IAC, SB, TTYPE, 1, IAC, SE]) * 4
-asks += bytes([IAC, SB, ENVIRON, 1, IAC, SE])
-asks += (bytes([IAC, SB, ENVIRON, 1, 0]) + b'CLIENT_NAME' + bytes([3])
-         + b'OSC_HYPERLINKS' + bytes([0]) + b'NOPE' + bytes([IAC, SE]))
-answers = 6
+if mode == 'name':
+    asks = bytes([IAC, DO, ENVIRON, IAC, SB, ENVIRON, 1, 0]) + b'CLIENT_NAME'
+    asks += bytes([IAC, SE])
+    answers = 1
+else:
+    asks = bytes([IAC, DO, TTYPE, IAC, DO, ENVIRON])
+    asks += bytes([IAC, SB, TTYPE, 1, IAC, SE]) * 4
+    asks += bytes([IAC, SB, ENVIRON, 1, IAC, SE])
+    asks += (bytes([IAC, SB, ENVIRON, 1, 0]) + b'CLIENT_NAME' + bytes([3])
+             + b'OSC_HYPERLINKS' + bytes([0]) + b'NOPE' + bytes([IAC, SE]))
+    answers = 6
 c.sendall(asks)
 got = b''
 c.settimeout(5)
@@ -3145,10 +3177,10 @@ with open(sent_file, 'wb') as f:
     f.write(got)
 EOF
 
-# start the MUD of telnet_mud.py, which sends $1
+# start the MUD of telnet_mud.py, which asks as $1 says and sends $2
 telnet_mud() {
     rm -f "$tmp/port" "$tmp/sent"
-    python3 -I "$tmp/telnet_mud.py" "$tmp/port" "$tmp/sent" "$1" &
+    python3 -I "$tmp/telnet_mud.py" "$tmp/port" "$tmp/sent" "$1" "$2" &
     server=$!
     i=0
     until [ -s "$tmp/port" ] || [ $i -ge 500 ]; do
@@ -3157,14 +3189,22 @@ telnet_mud() {
     done
 }
 
-telnet_mud 'clip\033]52;c;aGk=\007board\r\nlastline\r\n'
-run --until lastline \
-    'powwow tells a MUD its name, version, terminal and abilities' \
-    "#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
+url=https://example.org/$(printf '%060d' 0)
+links="see \\033]8;;$url\\033\\\\example\\033]8;;\\033\\\\ endofline\\r\\n"
+links="${links}a \\033]8;;file:///etc/passwd\\007file\\033]8;;\\007 link"
+links="${links}\\r\\nclip\\033]52;c;aGk=\\007board\\r\\nlastline\\r\\n"
+
+telnet_mud all "$links"
+run --until '#option links is now off' \
+    'powwow tells a MUD its name, version and abilities, and shows links' \
+    "#option +links +wrap
+#mark example=bold
+#action >+l ^lastline=#option -links
+#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
 # the MUD writes what powwow sent when powwow closes the connection
 wait $server 2>/dev/null
-# the terminal types as the MTTS says, and the NEW-ENVIRON variables of
-# the MNES, with no value for those that powwow does not know
+# the answers: the terminal types as the MTTS says, and the NEW-ENVIRON
+# variables of the MNES, with OSC_HYPERLINKS
 python3 -I - "$tmp/sent" <<'EOF' > "$tmp/check"
 import re, sys
 got = open(sys.argv[1], 'rb').read()
@@ -3175,6 +3215,9 @@ for opt in (b'\x18', b"'"):
 subs = re.findall(IAC + SB + b'(.*?)' + IAC + SE, got, re.S)
 ttypes = [s[2:] for s in subs if s[:2] == b'\x18\x00']
 environs = [s[2:] for s in subs if s[:2] == b"'\x00"]
+infos = [s[2:] for s in subs if s[:2] == b"'\x02"]
+if infos != [b'\x03OSC_HYPERLINKS\x010']:
+    print('NEW-ENVIRON INFO %r' % infos)
 name = re.fullmatch(rb'POWWOW (\S+)', ttypes[0] if ttypes else b'')
 if (len(ttypes) != 4 or name is None or ttypes[1] != b'xterm'
         or not re.fullmatch(rb'MTTS (517|2565)', ttypes[2])
@@ -3184,19 +3227,55 @@ else:
     version, mtts = name.group(1), ttypes[2][5:]
     want = [b'\x00CLIENT_NAME\x01POWWOW\x00CLIENT_VERSION\x01' + version
             + b'\x00CHARSET\x01UTF-8\x00MTTS\x01' + mtts
-            + b'\x00TERMINAL_TYPE\x01xterm',
-            b'\x00CLIENT_NAME\x01POWWOW\x03OSC_HYPERLINKS\x00NOPE']
+            + b'\x00TERMINAL_TYPE\x01xterm\x03OSC_HYPERLINKS\x011',
+            b'\x00CLIENT_NAME\x01POWWOW\x03OSC_HYPERLINKS\x011\x00NOPE']
     if environs != want:
         print('NEW-ENVIRON %r' % environs)
 EOF
 [ -s "$tmp/check" ] && fail "$(cat "$tmp/check")"
-
-# no OSC 52, which would write to the clipboard
+# the link whole, on one row, as its URL takes no room on screen, and with
+# no mark in its URL; the link to a file is ended at its start instead
+has "see <ESC>]8;;$url<ESC>\\<ESC>[1mexample<ESC>[m<ESC>]8;;<ESC>\\ endofline"
+grep -Fq 'file:' "$tmp/out" && fail 'expected no link to a file'
+bel=$(printf '\007')
+grep -Fq "a <ESC>]8;;${bel}file<ESC>]8;;$bel link" "$tmp/out" \
+    || fail 'expected the link to a file ended'
+# and no OSC 52, which would write to the clipboard
 has clipboard
+
+telnet_mud all "$links"
+run --until lastline '#option -links drops the links of a MUD' \
+    "#option -links
+#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
+wait $server 2>/dev/null
+has 'see example endofline'
+has 'a file link'
+grep -aq 'OSC_HYPERLINKS.0' "$tmp/sent" \
+    || fail 'expected OSC_HYPERLINKS 0 in NEW-ENVIRON'
+
+# INFO only to a MUD that asked for OSC_HYPERLINKS
+telnet_mud name 'lastline\r\n'
+run --until '#option links is now off' \
+    '#option links changed tells only a MUD that asked for it' \
+    "#option +links
+#action >+l ^lastline=#option -links
+#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
+wait $server 2>/dev/null
+grep -aq OSC_HYPERLINKS "$tmp/sent" \
+    && fail 'expected no OSC_HYPERLINKS sent'
+
+# a link with no end on its line is dropped up to the end of the line
+telnet_mud all 'a \033]8;;https://example.org/ broken\r\nlastline\r\n'
+run --until lastline 'a link with no end on its line is dropped' \
+    "#option +links
+#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
+wait $server 2>/dev/null
+has 'a '
+has lastline
 
 # a control string with no end on its line is dropped up to the end of
 # the line
-telnet_mud 'a \033]0;title broken\r\nlastline\r\n'
+telnet_mud all 'a \033]0;title broken\r\nlastline\r\n'
 run --until lastline 'a control string with no end on its line is dropped' \
     "#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
 wait $server 2>/dev/null

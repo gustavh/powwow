@@ -98,11 +98,19 @@ The user-visible changes in each release; those up to 1.3.2 are in
   MUD Terminal Type Standard, such as for UTF-8 and 256 colors.
 * NEW-ENVIRON: powwow tells the MUD the variables of the MUD
   New-Environ Standard, `CLIENT_NAME`, `CLIENT_VERSION`, `CHARSET`,
-  `MTTS` and `TERMINAL_TYPE`.
-* Control strings from the MUD other than the titles of the window,
-  such as OSC 52, which writes to the clipboard, the queries of the
-  terminal and the strings of `ESC P` and `ESC _`, are dropped, and so
-  are the C1 control characters.
+  `MTTS` and `TERMINAL_TYPE`, and the user variable `OSC_HYPERLINKS`, 1
+  if it shows the MUD's hyperlinks, as `#option links` says.
+* Hyperlinks (OSC 8) from the MUD reach the terminal with `#option
+  links`, by default `links=auto`, on in terminals that seem to show
+  them, or turned on or off for all terminals; and only those to the
+  URL schemes of `#option link-schemes`, by default `https http
+  mailto`, with no user name before the host, never to `telnet`, and
+  with only a subject and a body for `mailto`; the text of any other
+  link is shown as plain text.
+* Control strings from the MUD other than the titles of the window and
+  hyperlinks, such as OSC 52, which writes to the clipboard, the
+  queries of the terminal and the strings of `ESC P` and `ESC _`, are
+  dropped, and so are the C1 control characters.
 
 ### Platforms and building
 

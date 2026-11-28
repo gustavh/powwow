@@ -195,6 +195,46 @@ bool tty_locale_utf8(void)
             || strcasecmp(codeset, "UTF8") == 0);
 }
 
+/* does the environment variable 'name' start with 'prefix'? */
+static bool env_starts(const char *name, const char *prefix)
+{
+    const char *value = getenv(name);
+    return value != NULL && strncmp(value, prefix, strlen(prefix)) == 0;
+}
+
+/*
+ * does the terminal show hyperlinks (OSC 8)? a guess from the
+ * environment, as there is no terminfo capability nor query for them
+ */
+bool tty_guess_hyperlinks(void)
+{
+    static const char *const programs[] = {
+        "iTerm.app", "WezTerm", "vscode", "ghostty",
+    };
+    static const char *const terms[] = {
+        "xterm-kitty", "foot", "alacritty", "wezterm", "xterm-ghostty",
+    };
+
+    const char *program = getenv("TERM_PROGRAM");
+    if (program != NULL) {
+        for (size_t i = 0; i < sizeof programs / sizeof *programs; ++i) {
+            if (strcmp(program, programs[i]) == 0)
+                return true;
+        }
+        /* such as tmux, which may not pass them on */
+        if (*program != '\0')
+            return false;
+    }
+    for (size_t i = 0; i < sizeof terms / sizeof *terms; ++i) {
+        if (env_starts("TERM", terms[i]))
+            return true;
+    }
+    const char *vte = getenv("VTE_VERSION");
+    return ((vte != NULL && atoi(vte) >= 5000)
+            || getenv("KITTY_WINDOW_ID") != NULL
+            || getenv("WT_SESSION") != NULL);
+}
+
 /*
  * Set the terminal to character-at-a-time-without-echo mode, and save the
  * original state in ttybsave

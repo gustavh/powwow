@@ -144,9 +144,12 @@ extern bool opt_autoprint;
 extern bool opt_reprint;
 extern bool opt_sendsize;
 extern bool opt_autoclear;
+extern bool opt_links;
 
 /* the commands that #option editor, pager and shell set, or NULL */
 extern char *opt_editor, *opt_help_pager, *opt_pager, *opt_shell;
+/* the URL schemes that #option link-schemes sets, or NULL */
+extern char *opt_link_schemes;
 
 extern function_str last_edit_cmd;
 

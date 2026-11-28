@@ -96,7 +96,7 @@ static const char *const functions[] = {
     "}\n",
     "\n",
     "# add the settings NAME=VALUE that start with $2, after $1:\n",
-    "# on or off, or a command\n",
+    "# on or off, also auto for some, or a command\n",
     "_powwow_set()\n",
     "{\n",
     "    local name\n",
@@ -106,6 +106,12 @@ static const char *const functions[] = {
     "            case \" $_powwow_on_off \" in\n",
     "                *\" $name \"*)\n",
     "                    _powwow_add \"$1$name=\" \"on off\" \"${2#*=}\"\n",
+    "                    return ;;\n",
+    "            esac\n",
+    "            case \" $_powwow_on_off_auto \" in\n",
+    "                *\" $name \"*)\n",
+    "                    _powwow_add \"$1$name=\" \"on off auto\""
+    " \"${2#*=}\"\n",
     "                    return ;;\n",
     "            esac\n",
     "            case \" $_powwow_commands \" in\n",
@@ -284,6 +290,11 @@ static bool on_off(const char *name)
     return setting_kind(name) == SETTING_ON_OFF;
 }
 
+static bool on_off_auto(const char *name)
+{
+    return setting_kind(name) == SETTING_ON_OFF_AUTO;
+}
+
 static bool command(const char *name)
 {
     return setting_kind(name) == SETTING_COMMAND;
@@ -320,6 +331,7 @@ bool print_completion(const char *shell, const char *const *options)
     print_settings_of("get", any_setting);
     print_settings_of("set", settable);
     print_settings_of("on_off", on_off);
+    print_settings_of("on_off_auto", on_off_auto);
     print_settings_of("commands", command);
     print_words("tls", tls_option_names);
     printf("_powwow_shells='bash zsh'\n\n");

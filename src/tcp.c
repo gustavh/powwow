@@ -218,40 +218,94 @@ void tcp_set_charset(connsess *conn, enum charset cs, const char *why)
         mpi_identify(conn);
 }
 
+/* the subcommands of TERMINAL TYPE (RFC 1091) */
+enum {
+    SUBOPT_IS = 0,
+    SUBOPT_SEND = 1,
+};
+
+/* the name of the terminal, from $TERM, to tell the MUD */
+static const char *term_name(void)
+{
+    const char *term = getenv("TERM");
+    return term != NULL && *term != '\0' ? term : "unknown";
+}
+
 /*
- * process suboptions.
- * so far, only terminal type is processed but future extensions are
- * window size, X display location, etc.
+ * what powwow and the terminal can do on 'conn', as the bits of the MUD
+ * Terminal Type Standard (MTTS)
+ */
+static unsigned mtts_bits(const connsess *conn)
+{
+    enum {
+        MTTS_ANSI = 1,
+        MTTS_UTF8 = 4,
+        MTTS_256_COLORS = 8,
+        MTTS_TRUECOLOR = 256,
+        MTTS_SSL = 2048,
+    };
+
+    unsigned bits = 0;
+    const char *term = term_name();
+    if (strcmp(term, "dumb") != 0)
+        bits |= MTTS_ANSI;
+    const char *colorterm = getenv("COLORTERM");
+    if (colorterm != NULL
+        && (strcmp(colorterm, "truecolor") == 0
+            || strcmp(colorterm, "24bit") == 0))
+        bits |= MTTS_TRUECOLOR | MTTS_256_COLORS;
+    if (strstr(term, "256color") != NULL)
+        bits |= MTTS_256_COLORS;
+    if (conn->charset == CS_UTF8)
+        bits |= MTTS_UTF8;
+#ifdef USE_TLS
+    bits |= MTTS_SSL;
+#endif
+    return bits;
+}
+
+/*
+ * answer a TERMINAL TYPE SEND as the MTTS says: first with the name and
+ * version of powwow, then with the terminal's, then with the MTTS bits,
+ * which are repeated after that to show that the list has ended
+ */
+static void send_terminal_type(connsess *conn)
+{
+    char buf[300];
+    if (conn->ttype_sent == 0)
+        snprintf(buf, sizeof buf, "POWWOW %s", PACKAGE_VERSION);
+    else if (conn->ttype_sent == 1)
+        snprintf(buf, sizeof buf, "%.256s", term_name());
+    else
+        snprintf(buf, sizeof buf, "MTTS %u", mtts_bits(conn));
+    if (conn->ttype_sent < 2)
+        ++conn->ttype_sent;
+
+    static const char head[] = { IAC, SB, TELOPT_TTYPE, SUBOPT_IS };
+    tcp_raw_write(conn, head, sizeof head);
+    tcp_write_escape_iac(conn, buf, strlen(buf));
+    static const char tail[] = { IAC, SE };
+    tcp_raw_write(conn, tail, sizeof tail);
+#ifdef TELOPTS
+    tty_printf("[sent SB TERMINAL TYPE IS %s]\n", buf);
+#endif
+}
+
+/*
+ * process suboptions: TERMINAL TYPE and CHARSET
  */
 static void dosubopt(connsess *conn, byte *str, size_t len)
 {
-    /* both the options we know have a subcommand */
+    /* all the options we know have a subcommand */
     if (len < 2)
         return;
 
     if (str[0] == TELOPT_TTYPE) {
-        if (str[1] == 1) {
-            /* 1 == SEND */
+        if (str[1] == SUBOPT_SEND) {
 #ifdef TELOPTS
             tty_printf("[got SB TERMINAL TYPE SEND]\n");
 #endif
-            static const char head[] = { IAC, SB, TELOPT_TTYPE, TELQUAL_IS };
-            tcp_raw_write(conn, head, sizeof head);
-
-            const char *term = getenv("TERM");
-            if (term == NULL)
-                term = "unknown";
-            size_t tlen = strlen(term);
-            if (tlen > 256)
-                tlen = 256;     /* cap to something sensible */
-
-            tcp_write_escape_iac(conn, term, tlen);
-
-            static const char tail[] = { IAC, SE };
-            tcp_raw_write(conn, tail, sizeof tail);
-#ifdef TELOPTS
-            tty_printf("[sent SB TERMINAL TYPE IS %s]\n", term);
-#endif
+            send_terminal_type(conn);
         }
     } else if (str[0] == TELOPT_CHARSET) {
         if (str[1] == CHARSET_REQUEST)
@@ -835,8 +889,11 @@ static int read_telnet(connsess *conn, void *buffer, size_t maxsize)
                 linemode |= LM_CHAR;
                 hidden_mode_changed();
                 tty_special_keys();
-                /* FALLTHROUGH */
+                sendopt(conn, WILL, *s);
+                break;
             case TELOPT_TTYPE:
+                /* the list of terminal types starts again */
+                conn->ttype_sent = 0;
                 sendopt(conn, WILL, *s);
                 break;
             case TELOPT_NAWS:
@@ -869,6 +926,8 @@ static int read_telnet(connsess *conn, void *buffer, size_t maxsize)
             }
             if (*s == TELOPT_NAWS)
                 conn->naws = false;
+            if (*s == TELOPT_TTYPE)
+                conn->ttype_sent = 0;
             if (*s == TELOPT_CHARSET) {
                 /* only acknowledge if it was enabled; a refusal of our
                  * unsolicited WILL needs no answer */
@@ -1504,6 +1563,7 @@ void tcp_close(const char *id)
     conn->ideditor = false;
     conn->ideditor_utf8 = false;
     conn->naws = false;
+    conn->ttype_sent = 0;
     conn->telnet = false;
     conn->state = TELNET_NORMAL;
     conn->old_state = TELNET_NORMAL;
@@ -1619,6 +1679,7 @@ void tcp_spawn(const char *id, char *cmd)
     CONN_INDEX(i).ideditor = false;
     CONN_INDEX(i).ideditor_utf8 = false;
     CONN_INDEX(i).naws = false;
+    CONN_INDEX(i).ttype_sent = 0;
     CONN_INDEX(i).telnet = false;
     CONN_INDEX(i).state = TELNET_NORMAL;
     CONN_INDEX(i).old_state = TELNET_NORMAL;

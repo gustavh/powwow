@@ -3102,6 +3102,78 @@ if [ -f "$tmp/cert.pem" ]; then
     fi
 fi
 
+# a MUD without TLS, which writes the number of its port to $tmp/port,
+# asks for the terminal type four times, sends its argument, with escapes
+# such as \r and \033, once powwow has answered, and writes what powwow
+# sends to $tmp/sent until it closes
+cat > "$tmp/telnet_mud.py" <<'EOF'
+import codecs, os, socket, sys
+port_file, sent_file, text = sys.argv[1:4]
+IAC, SE, SB, DO, TTYPE = 255, 240, 250, 253, 24
+s = socket.socket()
+s.bind(('127.0.0.1', 0))
+s.listen(1)
+with open(port_file + '.new', 'w') as f:
+    f.write(str(s.getsockname()[1]))
+os.rename(port_file + '.new', port_file)
+c, _ = s.accept()
+asks = bytes([IAC, DO, TTYPE]) + bytes([IAC, SB, TTYPE, 1, IAC, SE]) * 4
+answers = 4
+c.sendall(asks)
+got = b''
+c.settimeout(5)
+try:
+    while got.count(bytes([IAC, SE])) < answers:
+        data = c.recv(4096)
+        if not data:
+            break
+        got += data
+    c.sendall(codecs.escape_decode(text.encode('latin-1'))[0])
+    while True:
+        data = c.recv(4096)
+        if not data:
+            break
+        got += data
+except OSError:
+    pass
+with open(sent_file, 'wb') as f:
+    f.write(got)
+EOF
+
+# start the MUD of telnet_mud.py, which sends $1
+telnet_mud() {
+    rm -f "$tmp/port" "$tmp/sent"
+    python3 -I "$tmp/telnet_mud.py" "$tmp/port" "$tmp/sent" "$1" &
+    server=$!
+    i=0
+    until [ -s "$tmp/port" ] || [ $i -ge 500 ]; do
+        sleep 0.01
+        i=$((i + 1))
+    done
+}
+
+telnet_mud 'lastline\r\n'
+run --until lastline 'powwow tells a MUD its name, version and terminal' \
+    "#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
+# the MUD writes what powwow sent when powwow closes the connection
+wait $server 2>/dev/null
+# the terminal types as the MTTS says
+python3 -I - "$tmp/sent" <<'EOF' > "$tmp/check"
+import re, sys
+got = open(sys.argv[1], 'rb').read()
+IAC, SE, SB, WILL = b'\xff', b'\xf0', b'\xfa', b'\xfb'
+if IAC + WILL + b'\x18' not in got:
+    print('no WILL TERMINAL-TYPE')
+subs = re.findall(IAC + SB + b'(.*?)' + IAC + SE, got, re.S)
+ttypes = [s[2:] for s in subs if s[:2] == b'\x18\x00']
+name = re.fullmatch(rb'POWWOW (\S+)', ttypes[0] if ttypes else b'')
+if (len(ttypes) != 4 or name is None or ttypes[1] != b'xterm'
+        or not re.fullmatch(rb'MTTS (5|2053)', ttypes[2])
+        or ttypes[3] != ttypes[2]):
+    print('terminal types %r' % ttypes)
+EOF
+[ -s "$tmp/check" ] && fail "$(cat "$tmp/check")"
+
 # a control string takes no room on screen, so the line is not wrapped
 # before x, and #mark leaves it whole
 title=$(printf '%090d' 0 | tr 0 t)

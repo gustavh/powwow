@@ -140,6 +140,11 @@ are shown or sent as \[oq]?\[cq].
 Captured, recorded and edited files use the connection\[cq]s character set;
 definition files are UTF-8, and older ISO-8859-1 ones are converted when
 loaded.
+.PP
+Asked for the terminal type,
+.B powwow
+tells the MUD its name and version, the terminal type and what they can
+do, as the MUD Terminal Type Standard (MTTS) says.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help

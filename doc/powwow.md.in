@@ -293,6 +293,18 @@ octal code (here, e with an acute accent), except in `#rawsend` and
 Unicode code point or name, in any command; case, and spaces and hyphens,
 do not matter in names.
 
+## What powwow tells the MUD
+
+When the MUD asks for the terminal type (telnet TERMINAL-TYPE, RFC
+1091), powwow answers as the MUD Terminal Type Standard (MTTS) says:
+first with its name and version, such as `POWWOW @PACKAGE_VERSION@`,
+then with the terminal type, from `TERM`, then with `MTTS` and the sum
+of what powwow and the terminal can do: 1 for ANSI colors (unless `TERM`
+is `dumb`), 4 for UTF-8 on the connection, 8 for 256 colors (with a
+`TERM` such as `xterm-256color`, or with truecolor), 256 for truecolor
+(with `COLORTERM` set to `truecolor` or `24bit`), and 2048 for TLS, if
+powwow has it. It answers with `MTTS` again after that.
+
 ## Quitting powwow
 
 At any time, you can type `#quit` to exit from powwow. Be

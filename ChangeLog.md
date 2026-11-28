@@ -93,6 +93,9 @@ The user-visible changes in each release; those up to 1.3.2 are in
 * Telnet replies to what the MUD sends at once, such as the window
   size, the terminal type and CHARSET, go out in one packet, not in one
   each.
+* MTTS: asked for the terminal type, powwow answers with its name and
+  version, `POWWOW 2.0.0`, then with `$TERM`, then with the bits of the
+  MUD Terminal Type Standard, such as for UTF-8 and 256 colors.
 
 ### Platforms and building
 

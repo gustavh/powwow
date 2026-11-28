@@ -73,6 +73,7 @@ typedef struct connsess {
     bool ideditor;              /* sent #request editor */
     bool ideditor_utf8;         /* and announced UTF-8 support in it */
     bool naws;                  /* the MUD asked for the window size */
+    int ttype_sent;             /* TERMINAL TYPE answers sent, up to 2 */
     bool telnet;                /* the MUD sent a telnet command */
     vtime last_sent;            /* when powwow last sent to it */
     enum telnet_state state;

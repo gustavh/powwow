@@ -302,8 +302,13 @@ then with the terminal type, from `TERM`, then with `MTTS` and the sum
 of what powwow and the terminal can do: 1 for ANSI colors (unless `TERM`
 is `dumb`), 4 for UTF-8 on the connection, 8 for 256 colors (with a
 `TERM` such as `xterm-256color`, or with truecolor), 256 for truecolor
-(with `COLORTERM` set to `truecolor` or `24bit`), and 2048 for TLS, if
-powwow has it. It answers with `MTTS` again after that.
+(with `COLORTERM` set to `truecolor` or `24bit`), 512 for NEW-ENVIRON,
+and 2048 for TLS, if powwow has it. It answers with `MTTS` again after
+that.
+
+When the MUD asks for NEW-ENVIRON variables (RFC 1572), powwow tells it
+those of the MUD New-Environ Standard (MNES): `CLIENT_NAME` (`POWWOW`),
+`CLIENT_VERSION`, `CHARSET`, `MTTS` and `TERMINAL_TYPE`, as above.
 
 ## Quitting powwow
 

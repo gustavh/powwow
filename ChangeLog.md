@@ -96,6 +96,9 @@ The user-visible changes in each release; those up to 1.3.2 are in
 * MTTS: asked for the terminal type, powwow answers with its name and
   version, `POWWOW 2.0.0`, then with `$TERM`, then with the bits of the
   MUD Terminal Type Standard, such as for UTF-8 and 256 colors.
+* NEW-ENVIRON: powwow tells the MUD the variables of the MUD
+  New-Environ Standard, `CLIENT_NAME`, `CLIENT_VERSION`, `CHARSET`,
+  `MTTS` and `TERMINAL_TYPE`.
 
 ### Platforms and building
 

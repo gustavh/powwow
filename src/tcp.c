@@ -34,6 +34,9 @@
 #ifndef TELOPT_CHARSET
 #  define TELOPT_CHARSET 42
 #endif
+#ifndef TELOPT_NEW_ENVIRON
+#  define TELOPT_NEW_ENVIRON 39
+#endif
 #include <arpa/inet.h>
 #include <unistd.h>
 
@@ -218,10 +221,18 @@ void tcp_set_charset(connsess *conn, enum charset cs, const char *why)
         mpi_identify(conn);
 }
 
-/* the subcommands of TERMINAL TYPE (RFC 1091) */
+/* the subcommands of TERMINAL TYPE and NEW-ENVIRON (RFC 1091, 1572) */
 enum {
     SUBOPT_IS = 0,
     SUBOPT_SEND = 1,
+};
+
+/* the parts of a list of NEW-ENVIRON variables */
+enum {
+    ENVIRON_VAR = 0,
+    ENVIRON_VALUE = 1,
+    ENVIRON_ESC = 2,
+    ENVIRON_USERVAR = 3,
 };
 
 /* the name of the terminal, from $TERM, to tell the MUD */
@@ -242,10 +253,11 @@ static unsigned mtts_bits(const connsess *conn)
         MTTS_UTF8 = 4,
         MTTS_256_COLORS = 8,
         MTTS_TRUECOLOR = 256,
+        MTTS_MNES = 512,
         MTTS_SSL = 2048,
     };
 
-    unsigned bits = 0;
+    unsigned bits = MTTS_MNES;
     const char *term = term_name();
     if (strcmp(term, "dumb") != 0)
         bits |= MTTS_ANSI;
@@ -291,8 +303,163 @@ static void send_terminal_type(connsess *conn)
 #endif
 }
 
+/* the NEW-ENVIRON variables of powwow: those of the MUD New-Environ
+ * Standard (MNES) */
+enum environ_var {
+    EV_CLIENT_NAME,
+    EV_CLIENT_VERSION,
+    EV_CHARSET,
+    EV_MTTS,
+    EV_TERMINAL_TYPE,
+    EV_COUNT
+};
+
+static const struct {
+    const char *name;
+    bool user;                  /* a USERVAR, else a VAR */
+} environ_vars[EV_COUNT] = {
+    [EV_CLIENT_NAME]    = { .name = "CLIENT_NAME" },
+    [EV_CLIENT_VERSION] = { .name = "CLIENT_VERSION" },
+    [EV_CHARSET]        = { .name = "CHARSET" },
+    [EV_MTTS]           = { .name = "MTTS" },
+    [EV_TERMINAL_TYPE]  = { .name = "TERMINAL_TYPE" },
+};
+
+/* the value of the NEW-ENVIRON variable 'var' on 'conn', in 'buf' of
+ * 'size' bytes */
+static const char *environ_value(const connsess *conn, enum environ_var var,
+                                 char *buf, size_t size)
+{
+    switch (var) {
+    case EV_CLIENT_NAME:
+        return "POWWOW";
+    case EV_CLIENT_VERSION:
+        return PACKAGE_VERSION;
+    case EV_CHARSET:
+        /* in capitals, as the MNES lists them */
+        snprintf(buf, size, "%s", charset_name(conn->charset));
+        for (char *p = buf; *p != '\0'; ++p)
+            *p = (char)toupper((unsigned char)*p);
+        return buf;
+    case EV_MTTS:
+        snprintf(buf, size, "%u", mtts_bits(conn));
+        return buf;
+    case EV_TERMINAL_TYPE:
+        snprintf(buf, size, "%.256s", term_name());
+        return buf;
+    case EV_COUNT:
+        break;
+    }
+    return "";
+}
+
+/* add 'len' bytes of 's' to the NEW-ENVIRON list in 'buf', of 'size'
+ * bytes and '*used' so far, escaping the bytes that separate its parts */
+static void environ_add(char *buf, size_t size, size_t *used,
+                        const char *s, size_t len)
+{
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = s[i];
+        bool esc = c <= ENVIRON_USERVAR;
+        if (*used + 1 + esc >= size)
+            return;
+        if (esc)
+            buf[(*used)++] = ENVIRON_ESC;
+        buf[(*used)++] = c;
+    }
+}
+
+/* add the NEW-ENVIRON variable named 'name', of 'len' bytes, as a VAR or
+ * as a USERVAR if 'user', with its value, if it is 'var', or else none,
+ * as it is not defined, to the list in 'buf' */
+static void environ_add_var(const connsess *conn, char *buf, size_t size,
+                            size_t *used, bool user, const char *name,
+                            size_t len, int var)
+{
+    if (*used + 1 >= size)
+        return;
+    buf[(*used)++] = user ? ENVIRON_USERVAR : ENVIRON_VAR;
+    environ_add(buf, size, used, name, len);
+    if (var < 0 || *used + 1 >= size)
+        return;
+    buf[(*used)++] = ENVIRON_VALUE;
+    char tmp[300];
+    const char *value = environ_value(conn, var, tmp, sizeof tmp);
+    environ_add(buf, size, used, value, strlen(value));
+}
+
+/* send the list of NEW-ENVIRON variables in 'buf', of 'len' bytes, as
+ * the subcommand 'cmd': IS or INFO */
+static void send_environ(connsess *conn, char cmd, const char *buf,
+                         size_t len)
+{
+    const char head[] = { IAC, SB, TELOPT_NEW_ENVIRON, cmd };
+    tcp_raw_write(conn, head, sizeof head);
+    tcp_write_escape_iac(conn, buf, len);
+    static const char tail[] = { IAC, SE };
+    tcp_raw_write(conn, tail, sizeof tail);
+}
+
 /*
- * process suboptions: TERMINAL TYPE and CHARSET
+ * answer a NEW-ENVIRON SEND of the 'len' bytes at 's', a list of the
+ * variables asked for: VAR or USERVAR and a name each, where a type with
+ * no name asks for all of that type, as no list at all asks for all
+ */
+static void environ_send(connsess *conn, const byte *s, size_t len)
+{
+    char buf[1024];
+    size_t used = 0;
+
+    if (len == 0) {
+        for (int v = 0; v < EV_COUNT; ++v) {
+            const char *name = environ_vars[v].name;
+            environ_add_var(conn, buf, sizeof buf, &used,
+                            environ_vars[v].user, name, strlen(name), v);
+        }
+    }
+    for (size_t i = 0; i < len; ) {
+        byte type = s[i++];
+        if (type != ENVIRON_VAR && type != ENVIRON_USERVAR)
+            break;
+        bool user = type == ENVIRON_USERVAR;
+        char name[256];
+        size_t nlen = 0;
+        while (i < len && s[i] != ENVIRON_VAR && s[i] != ENVIRON_USERVAR
+               && s[i] != ENVIRON_VALUE) {
+            if (s[i] == ENVIRON_ESC && i + 1 < len)
+                ++i;
+            if (nlen < sizeof name)
+                name[nlen++] = s[i];
+            ++i;
+        }
+        if (nlen == 0) {
+            for (int v = 0; v < EV_COUNT; ++v) {
+                if (environ_vars[v].user != user)
+                    continue;
+                const char *vname = environ_vars[v].name;
+                environ_add_var(conn, buf, sizeof buf, &used, user,
+                                vname, strlen(vname), v);
+            }
+            continue;
+        }
+        /* a variable asked for as a VAR or as a USERVAR, as MUDs may not
+         * know which it is */
+        int var = -1;
+        for (int v = 0; v < EV_COUNT && var < 0; ++v) {
+            if (strlen(environ_vars[v].name) == nlen
+                && memcmp(environ_vars[v].name, name, nlen) == 0)
+                var = v;
+        }
+        environ_add_var(conn, buf, sizeof buf, &used, user, name, nlen, var);
+    }
+    send_environ(conn, SUBOPT_IS, buf, used);
+#ifdef TELOPTS
+    tty_printf("[sent SB NEW-ENVIRON IS, %zu bytes]\n", used);
+#endif
+}
+
+/*
+ * process suboptions: TERMINAL TYPE, NEW-ENVIRON and CHARSET
  */
 static void dosubopt(connsess *conn, byte *str, size_t len)
 {
@@ -306,6 +473,13 @@ static void dosubopt(connsess *conn, byte *str, size_t len)
             tty_printf("[got SB TERMINAL TYPE SEND]\n");
 #endif
             send_terminal_type(conn);
+        }
+    } else if (str[0] == TELOPT_NEW_ENVIRON) {
+        if (str[1] == SUBOPT_SEND && conn->new_environ) {
+#ifdef TELOPTS
+            tty_printf("[got SB NEW-ENVIRON SEND]\n");
+#endif
+            environ_send(conn, str + 2, len - 2);
         }
     } else if (str[0] == TELOPT_CHARSET) {
         if (str[1] == CHARSET_REQUEST)
@@ -896,6 +1070,11 @@ static int read_telnet(connsess *conn, void *buffer, size_t maxsize)
                 conn->ttype_sent = 0;
                 sendopt(conn, WILL, *s);
                 break;
+            case TELOPT_NEW_ENVIRON:
+                if (!conn->new_environ)
+                    sendopt(conn, WILL, *s);
+                conn->new_environ = true;
+                break;
             case TELOPT_NAWS:
                 sendopt(conn, WILL, *s);
                 conn->naws = true;
@@ -928,6 +1107,8 @@ static int read_telnet(connsess *conn, void *buffer, size_t maxsize)
                 conn->naws = false;
             if (*s == TELOPT_TTYPE)
                 conn->ttype_sent = 0;
+            if (*s == TELOPT_NEW_ENVIRON)
+                conn->new_environ = false;
             if (*s == TELOPT_CHARSET) {
                 /* only acknowledge if it was enabled; a refusal of our
                  * unsolicited WILL needs no answer */
@@ -1564,6 +1745,7 @@ void tcp_close(const char *id)
     conn->ideditor_utf8 = false;
     conn->naws = false;
     conn->ttype_sent = 0;
+    conn->new_environ = false;
     conn->telnet = false;
     conn->state = TELNET_NORMAL;
     conn->old_state = TELNET_NORMAL;
@@ -1680,6 +1862,7 @@ void tcp_spawn(const char *id, char *cmd)
     CONN_INDEX(i).ideditor_utf8 = false;
     CONN_INDEX(i).naws = false;
     CONN_INDEX(i).ttype_sent = 0;
+    CONN_INDEX(i).new_environ = false;
     CONN_INDEX(i).telnet = false;
     CONN_INDEX(i).state = TELNET_NORMAL;
     CONN_INDEX(i).old_state = TELNET_NORMAL;

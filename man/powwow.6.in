@@ -141,10 +141,11 @@ Captured, recorded and edited files use the connection\[cq]s character set;
 definition files are UTF-8, and older ISO-8859-1 ones are converted when
 loaded.
 .PP
-Asked for the terminal type,
+Asked for the terminal type, or for NEW-ENVIRON variables,
 .B powwow
 tells the MUD its name and version, the terminal type and what they can
-do, as the MUD Terminal Type Standard (MTTS) says.
+do, as the MUD Terminal Type Standard (MTTS) and the MUD New-Environ
+Standard (MNES) say.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help

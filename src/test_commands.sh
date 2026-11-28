@@ -3103,13 +3103,14 @@ if [ -f "$tmp/cert.pem" ]; then
 fi
 
 # a MUD without TLS, which writes the number of its port to $tmp/port,
-# asks for the terminal type four times, sends its argument, with escapes
-# such as \r and \033, once powwow has answered, and writes what powwow
-# sends to $tmp/sent until it closes
+# asks for the terminal type four times and for the NEW-ENVIRON variables,
+# all of them and then some, sends its argument, with escapes such as \r
+# and \033, once powwow has answered, and writes what powwow sends to
+# $tmp/sent until it closes
 cat > "$tmp/telnet_mud.py" <<'EOF'
 import codecs, os, socket, sys
 port_file, sent_file, text = sys.argv[1:4]
-IAC, SE, SB, DO, TTYPE = 255, 240, 250, 253, 24
+IAC, SE, SB, DO, TTYPE, ENVIRON = 255, 240, 250, 253, 24, 39
 s = socket.socket()
 s.bind(('127.0.0.1', 0))
 s.listen(1)
@@ -3117,8 +3118,12 @@ with open(port_file + '.new', 'w') as f:
     f.write(str(s.getsockname()[1]))
 os.rename(port_file + '.new', port_file)
 c, _ = s.accept()
-asks = bytes([IAC, DO, TTYPE]) + bytes([IAC, SB, TTYPE, 1, IAC, SE]) * 4
-answers = 4
+asks = bytes([IAC, DO, TTYPE, IAC, DO, ENVIRON])
+asks += bytes([IAC, SB, TTYPE, 1, IAC, SE]) * 4
+asks += bytes([IAC, SB, ENVIRON, 1, IAC, SE])
+asks += (bytes([IAC, SB, ENVIRON, 1, 0]) + b'CLIENT_NAME' + bytes([3])
+         + b'OSC_HYPERLINKS' + bytes([0]) + b'NOPE' + bytes([IAC, SE]))
+answers = 6
 c.sendall(asks)
 got = b''
 c.settimeout(5)
@@ -3153,24 +3158,36 @@ telnet_mud() {
 }
 
 telnet_mud 'lastline\r\n'
-run --until lastline 'powwow tells a MUD its name, version and terminal' \
+run --until lastline \
+    'powwow tells a MUD its name, version, terminal and abilities' \
     "#connect main --no-tls 127.0.0.1 $(cat "$tmp/port")"
 # the MUD writes what powwow sent when powwow closes the connection
 wait $server 2>/dev/null
-# the terminal types as the MTTS says
+# the terminal types as the MTTS says, and the NEW-ENVIRON variables of
+# the MNES, with no value for those that powwow does not know
 python3 -I - "$tmp/sent" <<'EOF' > "$tmp/check"
 import re, sys
 got = open(sys.argv[1], 'rb').read()
 IAC, SE, SB, WILL = b'\xff', b'\xf0', b'\xfa', b'\xfb'
-if IAC + WILL + b'\x18' not in got:
-    print('no WILL TERMINAL-TYPE')
+for opt in (b'\x18', b"'"):
+    if IAC + WILL + opt not in got:
+        print('no WILL for option %r' % opt)
 subs = re.findall(IAC + SB + b'(.*?)' + IAC + SE, got, re.S)
 ttypes = [s[2:] for s in subs if s[:2] == b'\x18\x00']
+environs = [s[2:] for s in subs if s[:2] == b"'\x00"]
 name = re.fullmatch(rb'POWWOW (\S+)', ttypes[0] if ttypes else b'')
 if (len(ttypes) != 4 or name is None or ttypes[1] != b'xterm'
-        or not re.fullmatch(rb'MTTS (5|2053)', ttypes[2])
+        or not re.fullmatch(rb'MTTS (517|2565)', ttypes[2])
         or ttypes[3] != ttypes[2]):
     print('terminal types %r' % ttypes)
+else:
+    version, mtts = name.group(1), ttypes[2][5:]
+    want = [b'\x00CLIENT_NAME\x01POWWOW\x00CLIENT_VERSION\x01' + version
+            + b'\x00CHARSET\x01UTF-8\x00MTTS\x01' + mtts
+            + b'\x00TERMINAL_TYPE\x01xterm',
+            b'\x00CLIENT_NAME\x01POWWOW\x03OSC_HYPERLINKS\x00NOPE']
+    if environs != want:
+        print('NEW-ENVIRON %r' % environs)
 EOF
 [ -s "$tmp/check" ] && fail "$(cat "$tmp/check")"
 
